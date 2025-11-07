@@ -104,6 +104,43 @@ npm run build:linux
 
 The built applications will be in the `dist` folder.
 
+#### Custom App Icons
+
+To use custom icons instead of the default Electron icon:
+
+1. **Create a 512x512 PNG icon** and save it as `build/icon.png`
+
+2. **Generate icons** by running:
+   ```bash
+   cd build
+   ./generate-icons.sh
+   ```
+
+   This script automatically generates:
+   - **macOS** `.icns` file (required for macOS builds)
+   - **Linux** `.png` file (copied from source)
+
+3. **Create Windows `.ico` file** (required for Windows builds):
+
+   **Option A: Online Converter (Easiest)**
+   - Go to https://cloudconvert.com/png-to-ico
+   - Upload `build/icon.png`
+   - Download and save as `build/icons/icon.ico`
+
+   **Option B: Using ImageMagick**
+   ```bash
+   convert build/icon.png -define icon:auto-resize=256,128,64,48,32,16 build/icons/icon.ico
+   ```
+
+4. **Rebuild** your app - the custom icons will be used automatically:
+   ```bash
+   npm run build:mac    # Uses build/icons/icon.icns
+   npm run build:win    # Uses build/icons/icon.ico
+   npm run build:linux  # Uses build/icons/icon.png
+   ```
+
+**Note:** If icon files are missing, electron-builder will use the default Electron icon. The icon generation script is located at `build/generate-icons.sh` and includes detailed instructions.
+
 ### Option 2: Using electron-packager
 
 1. Install electron-packager:

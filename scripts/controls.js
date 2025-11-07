@@ -118,7 +118,8 @@ export class ControlsHandler {
             previewVideo.id = 'previewVideo';
             previewVideo.style.cssText = 'display: none; position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;';
             previewVideo.preload = 'auto';
-            previewVideo.muted = true; // Muted to avoid any audio issues
+            previewVideo.muted = true;
+            previewVideo.playsInline = true;
             document.body.appendChild(previewVideo);
         } else {
             // Ensure it's muted
@@ -132,139 +133,96 @@ export class ControlsHandler {
                 previewVideo.src = mainVideo.src;
                 previewVideo.load();
                 previewVideoLoaded = false;
-                
-                // Ensure preview video is paused (we only use it for frame capture)
                 previewVideo.pause();
+                previewVideo.muted = true;
                 
-                previewVideo.addEventListener('loadedmetadata', () => {
+                const onLoaded = () => {
                     previewVideoLoaded = true;
-                    // Keep preview video paused
                     previewVideo.pause();
-                }, { once: true });
+                    previewVideo.muted = true;
+                };
+                
+                previewVideo.addEventListener('loadedmetadata', onLoaded, { once: true });
+                previewVideo.addEventListener('canplay', onLoaded, { once: true });
+                previewVideo.addEventListener('loadeddata', onLoaded, { once: true });
+            } else if (mainVideo.src && previewVideo.src === mainVideo.src) {
+                // Already synced, just check if loaded
+                if (previewVideo.readyState >= 2) {
+                    previewVideoLoaded = true;
+                }
             }
         };
         
         // Sync when main video source changes
         this.videoPlayer.videoElement.addEventListener('loadedmetadata', syncPreviewVideo);
+        this.videoPlayer.videoElement.addEventListener('canplay', syncPreviewVideo);
         syncPreviewVideo();
         
-        // Track active seek operations to avoid conflicts
+        // Track active seek operations
         let activeSeekOperation = null;
-        let lastCapturedTime = -1;
         
         // Function to capture video frame at specific time using hidden video
         const captureFrameAtTime = (time) => {
             if (!previewCanvas || !previewVideo) return;
             
-            const mainVideo = this.videoPlayer.videoElement;
             const ctx = previewCanvas.getContext('2d');
+            const mainVideo = this.videoPlayer.videoElement;
             
-            // Round time to avoid floating point precision issues
-            time = Math.round(time * 100) / 100;
-            
-            // Use hidden preview video for frame capture (doesn't affect main video)
-            if (!previewVideoLoaded || !previewVideo.src || !previewVideo.duration) {
-                return; // Don't show anything if preview video isn't ready
-            }
-            
-            // Cancel any previous seek operation
-            if (activeSeekOperation) {
-                clearTimeout(activeSeekOperation.timeout);
-                if (activeSeekOperation.onSeeked) {
-                    previewVideo.removeEventListener('seeked', activeSeekOperation.onSeeked);
-                }
-                if (activeSeekOperation.onLoadedData) {
-                    previewVideo.removeEventListener('loadeddata', activeSeekOperation.onLoadedData);
-                }
-            }
-            
-            // Skip if we just captured this exact time
-            if (Math.abs(lastCapturedTime - time) < 0.01) {
+            // Ensure preview video has the same source
+            if (!previewVideo.src || previewVideo.src !== mainVideo.src) {
+                syncPreviewVideo();
+                // Try again after a short delay
+                setTimeout(() => captureFrameAtTime(time), 100);
                 return;
             }
             
-            // Ensure preview video is paused
-            if (!previewVideo.paused) {
-                previewVideo.pause();
+            // Check if preview video is ready (use readyState instead of flag)
+            if (previewVideo.readyState < 2) {
+                // Wait a bit and try again
+                setTimeout(() => captureFrameAtTime(time), 50);
+                return;
             }
             
-            // Check if preview video is already at the exact target time
-            const currentPreviewTime = Math.round(previewVideo.currentTime * 100) / 100;
-            if (Math.abs(currentPreviewTime - time) < 0.01 && previewVideo.readyState >= 4) {
-                try {
-                    ctx.drawImage(previewVideo, 0, 0, previewCanvas.width, previewCanvas.height);
-                    lastCapturedTime = time;
-                    return;
-                } catch (e) {
-                    // Fall through to seek method
-                }
+            // Ensure preview video is paused and muted
+            previewVideo.pause();
+            previewVideo.muted = true;
+            
+            // Cancel previous operation
+            if (activeSeekOperation) {
+                clearTimeout(activeSeekOperation);
             }
             
-            // Seek preview video to exact target time (this doesn't affect main video)
+            // Seek to target time
             previewVideo.currentTime = time;
-            lastCapturedTime = time;
             
-            // Wait for preview video to seek and then capture frame
+            // Capture frame function
             const captureFrame = () => {
-                // Double-check we're at the right time before capturing
-                const actualTime = Math.round(previewVideo.currentTime * 100) / 100;
-                if (Math.abs(actualTime - time) > 0.5) {
-                    // Not at the right time, don't capture
-                    activeSeekOperation = null;
-                    return;
-                }
-                
                 try {
-                    if (previewVideo.readyState >= 2) {
-                        // Clear canvas first
+                    if (previewVideo.readyState >= 2 && previewVideo.videoWidth > 0) {
                         ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-                        // Draw preview video frame to canvas
                         ctx.drawImage(previewVideo, 0, 0, previewCanvas.width, previewCanvas.height);
                     }
                 } catch (e) {
-                    console.error('Error capturing frame from preview video:', e);
+                    // Silently fail - might be CORS or other issue
                 }
                 activeSeekOperation = null;
             };
             
-            // Use seeked event - this fires when seek completes
+            // Listen for seeked event
             const onSeeked = () => {
-                // Wait a tiny bit for the frame to be ready
-                requestAnimationFrame(() => {
-                    captureFrame();
-                });
+                // Try capturing immediately and with a small delay
+                requestAnimationFrame(captureFrame);
+                setTimeout(captureFrame, 50);
                 previewVideo.removeEventListener('seeked', onSeeked);
-            };
-            
-            // Also listen for loadeddata as backup
-            const onLoadedData = () => {
-                if (Math.abs(previewVideo.currentTime - time) < 0.5) {
-                    requestAnimationFrame(() => {
-                        captureFrame();
-                    });
-                }
-                previewVideo.removeEventListener('loadeddata', onLoadedData);
             };
             
             previewVideo.addEventListener('seeked', onSeeked, { once: true });
-            previewVideo.addEventListener('loadeddata', onLoadedData, { once: true });
             
-            // Fallback timeout - verify and capture
-            const timeout = setTimeout(() => {
+            // Fallback - try capturing after timeout
+            activeSeekOperation = setTimeout(() => {
+                captureFrame();
                 previewVideo.removeEventListener('seeked', onSeeked);
-                previewVideo.removeEventListener('loadeddata', onLoadedData);
-                
-                const actualTime = Math.round(previewVideo.currentTime * 100) / 100;
-                if (Math.abs(actualTime - time) < 0.5) {
-                    requestAnimationFrame(() => {
-                        captureFrame();
-                    });
-                } else {
-                    activeSeekOperation = null;
-                }
-            }, 500);
-            
-            activeSeekOperation = { onSeeked, onLoadedData, timeout };
+            }, 400);
         };
         
         // Use both seekBar and seekBarWrapper for better event handling

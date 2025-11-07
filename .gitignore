@@ -5,3 +5,8 @@ dist/
 build/icons/
 build/icon.iconset/
 build/icon.png
+
+# Vim swap files
+*.swp
+*.swo
+*~

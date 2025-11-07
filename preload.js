@@ -14,4 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onSeek: (callback) => ipcRenderer.on('seek', (event, seconds) => callback(seconds)),
     onSpeedIncrease: (callback) => ipcRenderer.on('speed-increase', () => callback()),
     onSpeedDecrease: (callback) => ipcRenderer.on('speed-decrease', () => callback()),
+    onToggleVideoInfo: (callback) => ipcRenderer.on('toggle-video-info', () => callback()),
+    toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
+    isAlwaysOnTop: () => ipcRenderer.invoke('is-always-on-top'),
+    sendMessage: (message) => ipcRenderer.send(message),
 });

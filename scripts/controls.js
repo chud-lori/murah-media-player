@@ -6,6 +6,9 @@
 export class ControlsHandler {
     constructor(videoPlayer) {
         this.videoPlayer = videoPlayer;
+        this.controlsHidden = false;
+        this.inactivityTimeout = null;
+        this.inactivityDelay = 3000; // 3 seconds
         this.init();
     }
     
@@ -16,6 +19,10 @@ export class ControlsHandler {
         this.setupSpeedControl();
         this.setupSubtitleControls();
         this.setupKeyboardControls();
+        this.setupAutoHideControls();
+        this.setupAlwaysOnTop();
+        this.setupVideoInfoPanel();
+        this.setupKeyboardHelp();
     }
     
     setupControlButtons() {
@@ -63,9 +70,12 @@ export class ControlsHandler {
     
     setupSeekBar() {
         const seekBar = document.getElementById('seekBar');
+        const seekBarWrapper = document.querySelector('.seek-bar-wrapper');
+        const seekBarTooltip = document.getElementById('seekBarTooltip');
+        const seekBarPreview = document.getElementById('seekBarPreview');
         const currentTimeDisplay = document.getElementById('currentTime');
         
-        if (!seekBar) return;
+        if (!seekBar || !seekBarWrapper) return;
         
         seekBar.addEventListener('mousedown', () => {
             seekBar.isDragging = true;
@@ -83,6 +93,251 @@ export class ControlsHandler {
         
         seekBar.addEventListener('change', () => {
             this.videoPlayer.videoElement.currentTime = parseFloat(seekBar.value);
+        });
+        
+        // Seek bar tooltip and preview on hover
+        let showPreview = false;
+        let isHovering = false;
+        let previewCanvas = null;
+        let previewVideo = null;
+        let previewTimeout = null;
+        let previewVideoLoaded = false;
+        
+        // Initialize preview canvas and hidden video
+        const previewCanvasEl = document.getElementById('seekPreviewCanvas');
+        if (previewCanvasEl) {
+            previewCanvas = previewCanvasEl;
+            previewCanvas.width = 200;
+            previewCanvas.height = 112; // 16:9 aspect ratio
+        }
+        
+        // Get or create hidden preview video element
+        previewVideo = document.getElementById('previewVideo');
+        if (!previewVideo) {
+            previewVideo = document.createElement('video');
+            previewVideo.id = 'previewVideo';
+            previewVideo.style.cssText = 'display: none; position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;';
+            previewVideo.preload = 'auto';
+            previewVideo.muted = true; // Muted to avoid any audio issues
+            document.body.appendChild(previewVideo);
+        } else {
+            // Ensure it's muted
+            previewVideo.muted = true;
+        }
+        
+        // Sync preview video source when main video loads
+        const syncPreviewVideo = () => {
+            const mainVideo = this.videoPlayer.videoElement;
+            if (mainVideo.src && mainVideo.src !== previewVideo.src) {
+                previewVideo.src = mainVideo.src;
+                previewVideo.load();
+                previewVideoLoaded = false;
+                
+                // Ensure preview video is paused (we only use it for frame capture)
+                previewVideo.pause();
+                
+                previewVideo.addEventListener('loadedmetadata', () => {
+                    previewVideoLoaded = true;
+                    // Keep preview video paused
+                    previewVideo.pause();
+                }, { once: true });
+            }
+        };
+        
+        // Sync when main video source changes
+        this.videoPlayer.videoElement.addEventListener('loadedmetadata', syncPreviewVideo);
+        syncPreviewVideo();
+        
+        // Track active seek operations to avoid conflicts
+        let activeSeekOperation = null;
+        let lastCapturedTime = -1;
+        
+        // Function to capture video frame at specific time using hidden video
+        const captureFrameAtTime = (time) => {
+            if (!previewCanvas || !previewVideo) return;
+            
+            const mainVideo = this.videoPlayer.videoElement;
+            const ctx = previewCanvas.getContext('2d');
+            
+            // Round time to avoid floating point precision issues
+            time = Math.round(time * 100) / 100;
+            
+            // Use hidden preview video for frame capture (doesn't affect main video)
+            if (!previewVideoLoaded || !previewVideo.src || !previewVideo.duration) {
+                return; // Don't show anything if preview video isn't ready
+            }
+            
+            // Cancel any previous seek operation
+            if (activeSeekOperation) {
+                clearTimeout(activeSeekOperation.timeout);
+                if (activeSeekOperation.onSeeked) {
+                    previewVideo.removeEventListener('seeked', activeSeekOperation.onSeeked);
+                }
+                if (activeSeekOperation.onLoadedData) {
+                    previewVideo.removeEventListener('loadeddata', activeSeekOperation.onLoadedData);
+                }
+            }
+            
+            // Skip if we just captured this exact time
+            if (Math.abs(lastCapturedTime - time) < 0.01) {
+                return;
+            }
+            
+            // Ensure preview video is paused
+            if (!previewVideo.paused) {
+                previewVideo.pause();
+            }
+            
+            // Check if preview video is already at the exact target time
+            const currentPreviewTime = Math.round(previewVideo.currentTime * 100) / 100;
+            if (Math.abs(currentPreviewTime - time) < 0.01 && previewVideo.readyState >= 4) {
+                try {
+                    ctx.drawImage(previewVideo, 0, 0, previewCanvas.width, previewCanvas.height);
+                    lastCapturedTime = time;
+                    return;
+                } catch (e) {
+                    // Fall through to seek method
+                }
+            }
+            
+            // Seek preview video to exact target time (this doesn't affect main video)
+            previewVideo.currentTime = time;
+            lastCapturedTime = time;
+            
+            // Wait for preview video to seek and then capture frame
+            const captureFrame = () => {
+                // Double-check we're at the right time before capturing
+                const actualTime = Math.round(previewVideo.currentTime * 100) / 100;
+                if (Math.abs(actualTime - time) > 0.5) {
+                    // Not at the right time, don't capture
+                    activeSeekOperation = null;
+                    return;
+                }
+                
+                try {
+                    if (previewVideo.readyState >= 2) {
+                        // Clear canvas first
+                        ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+                        // Draw preview video frame to canvas
+                        ctx.drawImage(previewVideo, 0, 0, previewCanvas.width, previewCanvas.height);
+                    }
+                } catch (e) {
+                    console.error('Error capturing frame from preview video:', e);
+                }
+                activeSeekOperation = null;
+            };
+            
+            // Use seeked event - this fires when seek completes
+            const onSeeked = () => {
+                // Wait a tiny bit for the frame to be ready
+                requestAnimationFrame(() => {
+                    captureFrame();
+                });
+                previewVideo.removeEventListener('seeked', onSeeked);
+            };
+            
+            // Also listen for loadeddata as backup
+            const onLoadedData = () => {
+                if (Math.abs(previewVideo.currentTime - time) < 0.5) {
+                    requestAnimationFrame(() => {
+                        captureFrame();
+                    });
+                }
+                previewVideo.removeEventListener('loadeddata', onLoadedData);
+            };
+            
+            previewVideo.addEventListener('seeked', onSeeked, { once: true });
+            previewVideo.addEventListener('loadeddata', onLoadedData, { once: true });
+            
+            // Fallback timeout - verify and capture
+            const timeout = setTimeout(() => {
+                previewVideo.removeEventListener('seeked', onSeeked);
+                previewVideo.removeEventListener('loadeddata', onLoadedData);
+                
+                const actualTime = Math.round(previewVideo.currentTime * 100) / 100;
+                if (Math.abs(actualTime - time) < 0.5) {
+                    requestAnimationFrame(() => {
+                        captureFrame();
+                    });
+                } else {
+                    activeSeekOperation = null;
+                }
+            }, 500);
+            
+            activeSeekOperation = { onSeeked, onLoadedData, timeout };
+        };
+        
+        // Use both seekBar and seekBarWrapper for better event handling
+        const handleSeekBarHover = (e) => {
+            if (!this.videoPlayer.videoElement.duration) return;
+            
+            const rect = seekBar.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const time = Math.max(0, Math.min(this.videoPlayer.videoElement.duration, percent * this.videoPlayer.videoElement.duration));
+            
+            // Show preview on hover (hide tooltip when preview is shown)
+            if (seekBarPreview) {
+                seekBarPreview.classList.remove('hidden');
+                const previewTime = seekBarPreview.querySelector('.seek-preview-time');
+                if (previewTime) {
+                    previewTime.textContent = this.videoPlayer.formatTime(time);
+                }
+                const previewLeft = Math.max(10, Math.min(90, percent * 100));
+                seekBarPreview.style.left = `${previewLeft}%`;
+                seekBarPreview.style.opacity = '1';
+                showPreview = true;
+                
+                // Capture frame with minimal debouncing for responsive preview
+                if (previewTimeout) {
+                    clearTimeout(previewTimeout);
+                }
+                // Reduced debounce for faster, more responsive preview (like Netflix)
+                previewTimeout = setTimeout(() => {
+                    captureFrameAtTime(time);
+                }, 50); // Faster debounce for better responsiveness
+                
+                // Hide tooltip when preview is shown
+                if (seekBarTooltip) {
+                    seekBarTooltip.style.opacity = '0';
+                }
+            } else {
+                // Fallback to tooltip if preview doesn't exist
+                if (seekBarTooltip) {
+                    seekBarTooltip.textContent = this.videoPlayer.formatTime(time);
+                    const tooltipLeft = Math.max(5, Math.min(95, percent * 100));
+                    seekBarTooltip.style.left = `${tooltipLeft}%`;
+                    seekBarTooltip.style.opacity = '1';
+                }
+                showPreview = false;
+            }
+        };
+        
+        const handleSeekBarLeave = () => {
+            if (previewTimeout) {
+                clearTimeout(previewTimeout);
+                previewTimeout = null;
+            }
+            
+            if (seekBarTooltip) {
+                seekBarTooltip.style.opacity = '0';
+            }
+            if (seekBarPreview) {
+                seekBarPreview.classList.add('hidden');
+                seekBarPreview.style.opacity = '0';
+            }
+            showPreview = false;
+            isHovering = false;
+        };
+        
+        // Add event listeners to both seek bar and wrapper
+        seekBar.addEventListener('mousemove', handleSeekBarHover);
+        seekBarWrapper.addEventListener('mousemove', handleSeekBarHover);
+        
+        seekBar.addEventListener('mouseleave', handleSeekBarLeave);
+        seekBarWrapper.addEventListener('mouseleave', handleSeekBarLeave);
+        
+        seekBarWrapper.addEventListener('mouseenter', () => {
+            isHovering = true;
         });
     }
     
@@ -203,6 +458,21 @@ export class ControlsHandler {
                 e.preventDefault();
                 this.videoPlayer.toggleMute();
             }
+            // T key: Always on top toggle
+            else if (e.key === 't' || e.key === 'T') {
+                e.preventDefault();
+                this.toggleAlwaysOnTop();
+            }
+            // I key: Video info panel
+            else if (e.key === 'i' || e.key === 'I') {
+                e.preventDefault();
+                this.toggleVideoInfoPanel();
+            }
+            // ? key: Keyboard help
+            else if (e.key === '?') {
+                e.preventDefault();
+                this.toggleKeyboardHelp();
+            }
         });
     }
     
@@ -304,6 +574,342 @@ export class ControlsHandler {
             indicator.classList.remove('volume-indicator-show');
             indicator.classList.add('volume-indicator-hide');
         }, 1000);
+    }
+    
+    setupAutoHideControls() {
+        const controlsSection = document.querySelector('.controls-section');
+        const videoWrapper = document.getElementById('videoWrapper');
+        
+        if (!controlsSection || !videoWrapper) return;
+        
+        // Show controls on mouse move
+        let mouseMoveTimeout = null;
+        const showControls = () => {
+            this.resetInactivityTimer();
+        };
+        
+        // Track mouse movement
+        document.addEventListener('mousemove', () => {
+            if (this.controlsHidden) {
+                this.showControls();
+            }
+            this.resetInactivityTimer();
+        });
+        
+        // Track any user interaction
+        controlsSection.addEventListener('mouseenter', () => {
+            this.resetInactivityTimer();
+        });
+        
+        // Don't hide controls if mouse is over controls
+        controlsSection.addEventListener('mouseleave', () => {
+            this.resetInactivityTimer();
+        });
+    }
+    
+    resetInactivityTimer() {
+        clearTimeout(this.inactivityTimeout);
+        
+        // Only hide controls if video is playing and not paused
+        if (this.videoPlayer.videoElement && 
+            !this.videoPlayer.videoElement.paused && 
+            this.videoPlayer.videoElement.src) {
+            this.inactivityTimeout = setTimeout(() => {
+                this.hideControls();
+            }, this.inactivityDelay);
+        }
+    }
+    
+    showControls() {
+        const controlsSection = document.querySelector('.controls-section');
+        if (controlsSection) {
+            controlsSection.classList.remove('hidden');
+            this.controlsHidden = false;
+        }
+    }
+    
+    hideControls() {
+        const controlsSection = document.querySelector('.controls-section');
+        if (controlsSection && !controlsSection.matches(':hover')) {
+            controlsSection.classList.add('hidden');
+            this.controlsHidden = true;
+        }
+    }
+    
+    setupAlwaysOnTop() {
+        const alwaysOnTopBtn = document.getElementById('alwaysOnTopBtn');
+        if (!alwaysOnTopBtn) return;
+        
+        alwaysOnTopBtn.addEventListener('click', () => {
+            this.toggleAlwaysOnTop();
+        });
+        
+        // Check initial state
+        if (window.electronAPI && window.electronAPI.isAlwaysOnTop) {
+            window.electronAPI.isAlwaysOnTop().then(isOnTop => {
+                if (isOnTop) {
+                    alwaysOnTopBtn.classList.add('active');
+                }
+            });
+        }
+    }
+    
+    toggleAlwaysOnTop() {
+        if (window.electronAPI && window.electronAPI.toggleAlwaysOnTop) {
+            window.electronAPI.toggleAlwaysOnTop().then(isOnTop => {
+                const alwaysOnTopBtn = document.getElementById('alwaysOnTopBtn');
+                if (alwaysOnTopBtn) {
+                    if (isOnTop) {
+                        alwaysOnTopBtn.classList.add('active');
+                    } else {
+                        alwaysOnTopBtn.classList.remove('active');
+                    }
+                }
+            });
+        } else {
+            // Fallback: use IPC message
+            if (window.electronAPI && window.electronAPI.sendMessage) {
+                window.electronAPI.sendMessage('toggle-always-on-top');
+            }
+        }
+    }
+    
+    setupVideoInfoPanel() {
+        const videoInfoBtn = document.getElementById('videoInfoBtn');
+        const closeVideoInfoBtn = document.getElementById('closeVideoInfoBtn');
+        const videoInfoPanel = document.getElementById('videoInfoPanel');
+        
+        if (videoInfoBtn) {
+            videoInfoBtn.addEventListener('click', () => {
+                this.toggleVideoInfoPanel();
+            });
+        }
+        
+        if (closeVideoInfoBtn) {
+            closeVideoInfoBtn.addEventListener('click', () => {
+                this.toggleVideoInfoPanel();
+            });
+        }
+        
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && videoInfoPanel && !videoInfoPanel.classList.contains('hidden')) {
+                this.toggleVideoInfoPanel();
+            }
+        });
+    }
+    
+    toggleVideoInfoPanel() {
+        const videoInfoPanel = document.getElementById('videoInfoPanel');
+        const videoInfoContent = document.getElementById('videoInfoContent');
+        
+        if (!videoInfoPanel || !videoInfoContent) return;
+        
+        if (videoInfoPanel.classList.contains('hidden')) {
+            // Show panel and populate info
+            const info = this.videoPlayer.getVideoInfo();
+            if (info) {
+                const fileSizeMB = (info.size / (1024 * 1024)).toFixed(2);
+                const fileSizeGB = (info.size / (1024 * 1024 * 1024)).toFixed(2);
+                const fileSizeDisplay = info.size > 1024 * 1024 * 1024 ? `${fileSizeGB} GB` : `${fileSizeMB} MB`;
+                const duration = this.videoPlayer.formatTime(info.duration);
+                const currentTime = this.videoPlayer.formatTime(info.currentTime);
+                const resolution = `${info.videoWidth} × ${info.videoHeight}`;
+                const aspectRatio = (info.videoWidth / info.videoHeight).toFixed(2);
+                
+                // Calculate approximate bitrate (if duration is available)
+                let bitrateInfo = 'N/A';
+                if (info.duration > 0) {
+                    const bitrateKbps = Math.round((info.size * 8) / (info.duration * 1000));
+                    const bitrateMbps = (bitrateKbps / 1000).toFixed(2);
+                    bitrateInfo = bitrateMbps > 1 ? `${bitrateMbps} Mbps` : `${bitrateKbps} Kbps`;
+                }
+                
+                // Extract codec info from MIME type and detected codec
+                let codecInfo = 'Unknown';
+                let videoCodec = 'Unknown';
+                let audioCodec = 'Unknown';
+                
+                // Use detected codecs if available
+                if (info.detectedVideoCodec) {
+                    videoCodec = info.detectedVideoCodec;
+                }
+                if (info.detectedAudioCodec) {
+                    audioCodec = info.detectedAudioCodec;
+                }
+                
+                // If we have detected codecs, use them
+                if (info.detectedVideoCodec || info.detectedAudioCodec) {
+                    codecInfo = [info.detectedVideoCodec || 'Unknown Video', info.detectedAudioCodec || 'Unknown Audio'].join(' / ');
+                } else if (info.type) {
+                    // Try to extract codecs from MIME type
+                    const codecMatch = info.type.match(/codecs="([^"]+)"/);
+                    if (codecMatch) {
+                        const codecs = codecMatch[1].split(',');
+                        videoCodec = codecs[0]?.trim() || 'Unknown';
+                        audioCodec = codecs[1]?.trim() || 'Unknown';
+                        codecInfo = codecs.join(', ');
+                    } else {
+                        // Extract from type string and guess from format
+                        const typeParts = info.type.split('/');
+                        if (typeParts.length > 1) {
+                            const format = typeParts[1].split(';')[0].trim();
+                            codecInfo = format;
+                            
+                            // Get file extension for better detection
+                            const fileExtension = info.name.split('.').pop()?.toLowerCase() || '';
+                            
+                            // Try to guess codec from format and extension
+                            if (format.includes('mp4') || format.includes('mpeg4') || fileExtension === 'mp4' || fileExtension === 'm4v') {
+                                if (!videoCodec || videoCodec === 'Unknown') {
+                                    videoCodec = 'H.264 / MPEG-4';
+                                }
+                                if (!audioCodec || audioCodec === 'Unknown') {
+                                    audioCodec = 'AAC';
+                                }
+                            } else if (format.includes('webm') || fileExtension === 'webm') {
+                                if (!videoCodec || videoCodec === 'Unknown') {
+                                    videoCodec = 'VP8 / VP9';
+                                }
+                                if (!audioCodec || audioCodec === 'Unknown') {
+                                    audioCodec = 'Vorbis / Opus';
+                                }
+                            } else if (format.includes('matroska') || format.includes('mkv') || fileExtension === 'mkv') {
+                                if (!videoCodec || videoCodec === 'Unknown') {
+                                    videoCodec = 'Various (MKV)';
+                                }
+                                if (!audioCodec || audioCodec === 'Unknown') {
+                                    audioCodec = 'Various';
+                                }
+                            } else if (format.includes('quicktime') || fileExtension === 'mov') {
+                                if (!videoCodec || videoCodec === 'Unknown') {
+                                    videoCodec = 'H.264 / QuickTime';
+                                }
+                                if (!audioCodec || audioCodec === 'Unknown') {
+                                    audioCodec = 'AAC';
+                                }
+                            } else if (fileExtension === 'avi') {
+                                if (!videoCodec || videoCodec === 'Unknown') {
+                                    videoCodec = 'Various (AVI)';
+                                }
+                                if (!audioCodec || audioCodec === 'Unknown') {
+                                    audioCodec = 'Various';
+                                }
+                            } else {
+                                if (!videoCodec || videoCodec === 'Unknown') {
+                                    videoCodec = format || 'Unknown';
+                                }
+                                if (!audioCodec || audioCodec === 'Unknown') {
+                                    audioCodec = 'Unknown';
+                                }
+                            }
+                        } else {
+                            codecInfo = info.type;
+                        }
+                    }
+                }
+                
+                // Get file extension for better format detection
+                const fileExtension = info.name.split('.').pop()?.toLowerCase() || '';
+                const formatName = fileExtension.toUpperCase() || 'Unknown';
+                
+                videoInfoContent.innerHTML = `
+                    <div class="video-info-section">
+                        <h4>File Information</h4>
+                        <p><strong>File Name:</strong><br><span class="info-value">${info.name}</span></p>
+                        <p><strong>File Size:</strong> <span class="info-value">${fileSizeDisplay}</span></p>
+                        <p><strong>File Format:</strong> <span class="info-value">${formatName}</span></p>
+                        <p><strong>MIME Type:</strong> <span class="info-value">${info.type || 'Unknown'}</span></p>
+                    </div>
+                    
+                    <div class="video-info-section">
+                        <h4>Video Properties</h4>
+                        <p><strong>Resolution:</strong> <span class="info-value">${resolution}</span></p>
+                        <p><strong>Aspect Ratio:</strong> <span class="info-value">${aspectRatio}:1</span></p>
+                        <p><strong>Video Codec:</strong> <span class="info-value">${videoCodec}</span></p>
+                        <p><strong>Audio Codec:</strong> <span class="info-value">${audioCodec}</span></p>
+                        <p><strong>Bitrate:</strong> <span class="info-value">${bitrateInfo}</span></p>
+                    </div>
+                    
+                    <div class="video-info-section">
+                        <h4>Playback Information</h4>
+                        <p><strong>Duration:</strong> <span class="info-value">${duration}</span></p>
+                        <p><strong>Current Time:</strong> <span class="info-value">${currentTime}</span></p>
+                        <p><strong>Playback Rate:</strong> <span class="info-value">${info.playbackRate}x</span></p>
+                        <p><strong>Volume:</strong> <span class="info-value">${Math.round(info.volume * 100)}%</span></p>
+                        <p><strong>Muted:</strong> <span class="info-value">${info.muted ? 'Yes' : 'No'}</span></p>
+                    </div>
+                `;
+            } else {
+                videoInfoContent.innerHTML = '<p>No video loaded</p>';
+            }
+            videoInfoPanel.classList.remove('hidden');
+        } else {
+            videoInfoPanel.classList.add('hidden');
+        }
+    }
+    
+    setupKeyboardHelp() {
+        const keyboardHelpBtn = document.getElementById('keyboardHelpBtn');
+        const closeKeyboardHelpBtn = document.getElementById('closeKeyboardHelpBtn');
+        const keyboardHelpOverlay = document.getElementById('keyboardHelpOverlay');
+        const keyboardHelpList = document.getElementById('keyboardHelpList');
+        
+        if (keyboardHelpBtn) {
+            keyboardHelpBtn.addEventListener('click', () => {
+                this.toggleKeyboardHelp();
+            });
+        }
+        
+        if (closeKeyboardHelpBtn) {
+            closeKeyboardHelpBtn.addEventListener('click', () => {
+                this.toggleKeyboardHelp();
+            });
+        }
+        
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && keyboardHelpOverlay && !keyboardHelpOverlay.classList.contains('hidden')) {
+                this.toggleKeyboardHelp();
+            }
+        });
+        
+        // Populate keyboard shortcuts
+        if (keyboardHelpList) {
+            const shortcuts = [
+                { key: 'Space', description: 'Play/Pause' },
+                { key: 'Left Arrow', description: 'Seek Backward 5s' },
+                { key: 'Right Arrow', description: 'Seek Forward 5s' },
+                { key: 'Up Arrow', description: 'Increase Volume' },
+                { key: 'Down Arrow', description: 'Decrease Volume' },
+                { key: 'M', description: 'Mute/Unmute' },
+                { key: 'F', description: 'Toggle Fullscreen' },
+                { key: 'F11', description: 'Toggle Fullscreen (Alt)' },
+                { key: 'T', description: 'Toggle Always on Top' },
+                { key: 'I', description: 'Show Video Info' },
+                { key: '?', description: 'Show Keyboard Shortcuts' },
+                { key: 'Esc', description: 'Close Overlays' },
+                { key: 'Double Click', description: 'Toggle Fullscreen (on video)' }
+            ];
+            
+            keyboardHelpList.innerHTML = shortcuts.map(shortcut => `
+                <div class="keyboard-help-item">
+                    <span class="keyboard-help-description">${shortcut.description}</span>
+                    <span class="keyboard-help-key">${shortcut.key}</span>
+                </div>
+            `).join('');
+        }
+    }
+    
+    toggleKeyboardHelp() {
+        const keyboardHelpOverlay = document.getElementById('keyboardHelpOverlay');
+        if (!keyboardHelpOverlay) return;
+        
+        if (keyboardHelpOverlay.classList.contains('hidden')) {
+            keyboardHelpOverlay.classList.remove('hidden');
+        } else {
+            keyboardHelpOverlay.classList.add('hidden');
+        }
     }
 }
 

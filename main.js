@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 const path = require('path');
 
 // Set app name VERY EARLY (before app is ready) - affects macOS menu bar
@@ -38,6 +38,31 @@ function createWindow() {
 
     mainWindow.on('closed', () => {
         mainWindow = null;
+    });
+}
+
+function setupIpcHandlers() {
+    ipcMain.handle('toggle-always-on-top', () => {
+        if (mainWindow) {
+            const isAlwaysOnTop = mainWindow.isAlwaysOnTop();
+            mainWindow.setAlwaysOnTop(!isAlwaysOnTop);
+            return !isAlwaysOnTop;
+        }
+        return false;
+    });
+    
+    ipcMain.handle('is-always-on-top', () => {
+        if (mainWindow) {
+            return mainWindow.isAlwaysOnTop();
+        }
+        return false;
+    });
+    
+    ipcMain.on('toggle-always-on-top', () => {
+        if (mainWindow) {
+            const isAlwaysOnTop = mainWindow.isAlwaysOnTop();
+            mainWindow.setAlwaysOnTop(!isAlwaysOnTop);
+        }
     });
 }
 
@@ -158,12 +183,30 @@ function createMenu() {
                     }
                 },
                 {
-                    label: 'Toggle Developer Tools',
+                    label: 'Always on Top',
+                    accelerator: 'CmdOrCtrl+T',
+                    click: () => {
+                        if (mainWindow) {
+                            mainWindow.setAlwaysOnTop(!mainWindow.isAlwaysOnTop());
+                        }
+                    }
+                },
+                {
+                    label: 'Video Info',
                     accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
                     click: () => {
                         if (mainWindow) {
-                            mainWindow.webContents.toggleDevTools();
+                            mainWindow.webContents.send('toggle-video-info');
                         }
+                    }
+                },
+                { type: 'separator' },
+                {
+                    label: 'Toggle Developer Tools',
+                    accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+                    visible: false, // Hide developer tools
+                    click: () => {
+                        // Disabled - do nothing
                     }
                 }
             ]
@@ -225,6 +268,7 @@ function createMenu() {
 }
 
 app.whenReady().then(() => {
+    setupIpcHandlers();
     createWindow();
     createMenu();
 

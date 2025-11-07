@@ -9,10 +9,15 @@ export class VideoPlayer {
         this.videoFileInput = document.getElementById('videoFile');
         this.subtitleFileInput = document.getElementById('subtitleFile');
         this.messageOverlay = document.getElementById('messageOverlay');
+        this.loadingIndicator = document.getElementById('loadingIndicator');
+        this.headerTitle = document.getElementById('headerTitle');
         
         this.subTitleFontSize = 1.8;
         this.subTitleColor = '#FFFFFF';
         this.lastVolume = 1.0;
+        this.currentVideoFile = null;
+        this.currentVideoPath = null;
+        this.lastSavedSecond = null;
         
         this.init();
     }
@@ -34,27 +39,85 @@ export class VideoPlayer {
         this.subtitleFileInput.addEventListener('change', (e) => this.handleSubtitleFile(e));
         
         // Video events
+        this.videoElement.addEventListener('loadstart', () => this.onLoadStart());
         this.videoElement.addEventListener('loadedmetadata', () => this.onMetadataLoaded());
+        this.videoElement.addEventListener('loadeddata', () => this.onLoadedData());
+        this.videoElement.addEventListener('canplay', () => this.onCanPlay());
+        this.videoElement.addEventListener('waiting', () => this.onWaiting());
+        this.videoElement.addEventListener('playing', () => this.onPlaying());
         this.videoElement.addEventListener('timeupdate', () => this.onTimeUpdate());
         this.videoElement.addEventListener('play', () => this.onPlay());
         this.videoElement.addEventListener('pause', () => this.onPause());
         this.videoElement.addEventListener('ended', () => this.onEnded());
         this.videoElement.addEventListener('error', (e) => this.onError(e));
-        this.videoElement.addEventListener('click', () => this.onVideoClick());
+        
+        // Double-click to toggle fullscreen
+        let clickTimeout = null;
+        let clickCount = 0;
+        
+        this.videoElement.addEventListener('click', (e) => {
+            clickCount++;
+            if (clickTimeout) {
+                clearTimeout(clickTimeout);
+            }
+            clickTimeout = setTimeout(() => {
+                if (clickCount === 1) {
+                    // Single click - play/pause
+                    this.onVideoClick();
+                }
+                clickCount = 0;
+                clickTimeout = null;
+            }, 300);
+        });
+        
+        this.videoElement.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            clickCount = 0;
+            if (clickTimeout) {
+                clearTimeout(clickTimeout);
+                clickTimeout = null;
+            }
+            this.toggleFullscreen();
+        });
+        
+        // Drag and drop support
+        this.setupDragAndDrop();
+        
+        // Load saved playback position
+        this.loadPlaybackPosition();
     }
     
     handleVideoFile(event) {
         const file = event.target.files[0];
         if (!file) return;
         
+        this.loadVideoFile(file);
+    }
+    
+    loadVideoFile(file) {
         // Revoke old URL if exists
         if (this.videoElement.src) {
             URL.revokeObjectURL(this.videoElement.src);
         }
         
+        this.currentVideoFile = file;
+        this.currentVideoPath = file.name; // Store filename for localStorage key
+        this.lastSavedSecond = null; // Reset saved position tracker
+        
         // Create local URL for selected file
-        this.videoElement.src = URL.createObjectURL(file);
+        const videoUrl = URL.createObjectURL(file);
+        this.videoElement.src = videoUrl;
         this.videoElement.load();
+        
+        // Sync preview video source
+        const previewVideo = document.getElementById('previewVideo');
+        if (previewVideo) {
+            previewVideo.src = videoUrl;
+            previewVideo.load();
+            // Ensure preview video is paused (we only use it for frame capture)
+            previewVideo.pause();
+        }
+        
         this.hideMessage();
         this.showMessage("Video loaded. Press Play.");
         
@@ -68,6 +131,17 @@ export class VideoPlayer {
         if (videoBtn) {
             videoBtn.classList.add('has-file');
             videoBtn.innerHTML = `<i class="fas fa-check"></i> ${file.name}`;
+        }
+        
+        // Update header title
+        this.updateHeaderTitle(file.name);
+    }
+    
+    updateHeaderTitle(title) {
+        if (this.headerTitle) {
+            // Remove file extension for cleaner display
+            const nameWithoutExt = title.replace(/\.[^/.]+$/, '');
+            this.headerTitle.textContent = nameWithoutExt || 'Murah Media Player';
         }
     }
     
@@ -120,6 +194,27 @@ export class VideoPlayer {
         reader.readAsText(file);
     }
     
+    onLoadStart() {
+        this.showLoading();
+    }
+    
+    onLoadedData() {
+        // Restore playback position after metadata is loaded
+        this.restorePlaybackPosition();
+    }
+    
+    onCanPlay() {
+        this.hideLoading();
+    }
+    
+    onWaiting() {
+        this.showLoading();
+    }
+    
+    onPlaying() {
+        this.hideLoading();
+    }
+    
     onMetadataLoaded() {
         this.videoElement.volume = 1.0;
         const volumeSlider = document.getElementById('volumeSlider');
@@ -141,6 +236,17 @@ export class VideoPlayer {
         }
         if (currentTimeDisplay) {
             currentTimeDisplay.textContent = this.formatTime(this.videoElement.currentTime);
+        }
+        
+        // Save playback position periodically (every 5 seconds)
+        if (this.currentVideoPath && this.videoElement.currentTime > 0) {
+            const currentSecond = Math.floor(this.videoElement.currentTime);
+            if (!this.lastSavedSecond || currentSecond !== this.lastSavedSecond) {
+                if (currentSecond % 5 === 0) {
+                    this.savePlaybackPosition();
+                    this.lastSavedSecond = currentSecond;
+                }
+            }
         }
     }
     
@@ -319,6 +425,221 @@ export class VideoPlayer {
     srtToVtt(srtContent) {
         const vttContent = srtContent.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
         return 'WEBVTT\n\n' + vttContent;
+    }
+    
+    showLoading() {
+        if (this.loadingIndicator) {
+            this.loadingIndicator.classList.remove('hidden');
+        }
+    }
+    
+    hideLoading() {
+        if (this.loadingIndicator) {
+            this.loadingIndicator.classList.add('hidden');
+        }
+    }
+    
+    toggleFullscreen() {
+        const videoWrapper = document.getElementById('videoWrapper');
+        if (!videoWrapper) return;
+        
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            if (videoWrapper.requestFullscreen) {
+                videoWrapper.requestFullscreen();
+            } else if (videoWrapper.webkitRequestFullscreen) {
+                videoWrapper.webkitRequestFullscreen();
+            } else if (videoWrapper.mozRequestFullScreen) {
+                videoWrapper.mozRequestFullScreen();
+            }
+        }
+    }
+    
+    setupDragAndDrop() {
+        const videoWrapper = document.getElementById('videoWrapper');
+        if (!videoWrapper) return;
+        
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            videoWrapper.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }, false);
+        });
+        
+        // Highlight drop zone
+        ['dragenter', 'dragover'].forEach(eventName => {
+            videoWrapper.addEventListener(eventName, () => {
+                videoWrapper.classList.add('drag-over');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            videoWrapper.addEventListener(eventName, () => {
+                videoWrapper.classList.remove('drag-over');
+            }, false);
+        });
+        
+        // Handle dropped files
+        videoWrapper.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                // Check if it's a video file
+                if (file.type.startsWith('video/') || 
+                    file.name.match(/\.(mp4|mkv|webm|avi|mov|m4v)$/i)) {
+                    this.loadVideoFile(file);
+                } else if (file.name.match(/\.(srt|vtt)$/i)) {
+                    // Handle subtitle file
+                    const fakeEvent = { target: { files: [file] } };
+                    this.handleSubtitleFile(fakeEvent);
+                }
+            }
+        }, false);
+    }
+    
+    savePlaybackPosition() {
+        if (!this.currentVideoPath || !this.videoElement.duration) return;
+        
+        const key = `playback_position_${this.currentVideoPath}`;
+        const position = this.videoElement.currentTime;
+        const duration = this.videoElement.duration;
+        
+        // Only save if video is more than 10 seconds long and we're past 5 seconds
+        if (duration > 10 && position > 5) {
+            localStorage.setItem(key, JSON.stringify({
+                position: position,
+                duration: duration,
+                timestamp: Date.now()
+            }));
+        }
+    }
+    
+    loadPlaybackPosition() {
+        // This will be called after metadata is loaded
+    }
+    
+    restorePlaybackPosition() {
+        if (!this.currentVideoPath || !this.videoElement.duration) return;
+        
+        const key = `playback_position_${this.currentVideoPath}`;
+        const saved = localStorage.getItem(key);
+        
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                // Only restore if duration matches (within 1 second tolerance)
+                if (Math.abs(data.duration - this.videoElement.duration) < 1) {
+                    // Only restore if saved position is more than 5 seconds
+                    if (data.position > 5 && data.position < this.videoElement.duration - 5) {
+                        // Ask user if they want to resume (optional - for now, auto-resume)
+                        this.videoElement.currentTime = data.position;
+                    }
+                }
+            } catch (e) {
+                console.error('Error restoring playback position:', e);
+            }
+        }
+    }
+    
+    getVideoInfo() {
+        if (!this.videoElement.src || !this.currentVideoFile) {
+            return null;
+        }
+        
+        // Try to get MIME type from file, or detect from extension
+        let mimeType = this.currentVideoFile.type;
+        if (!mimeType || mimeType === '' || mimeType === 'application/octet-stream') {
+            // Detect MIME type from file extension
+            const extension = this.currentVideoFile.name.split('.').pop()?.toLowerCase() || '';
+            const mimeTypeMap = {
+                'mp4': 'video/mp4',
+                'm4v': 'video/mp4',
+                'webm': 'video/webm',
+                'ogg': 'video/ogg',
+                'ogv': 'video/ogg',
+                'avi': 'video/x-msvideo',
+                'mov': 'video/quicktime',
+                'mkv': 'video/x-matroska',
+                'flv': 'video/x-flv',
+                'wmv': 'video/x-ms-wmv'
+            };
+            mimeType = mimeTypeMap[extension] || 'video/unknown';
+        }
+        
+        // Try to detect codec from video element
+        let detectedVideoCodec = null;
+        let detectedAudioCodec = null;
+        const video = this.videoElement;
+        if (video.canPlayType) {
+            // Test common video codecs
+            const videoCodecTests = [
+                { codec: 'avc1.42E01E', name: 'H.264 Baseline' },
+                { codec: 'avc1.4D001E', name: 'H.264 Main' },
+                { codec: 'avc1.640028', name: 'H.264 High' },
+                { codec: 'vp8', name: 'VP8' },
+                { codec: 'vp9', name: 'VP9' },
+                { codec: 'av01', name: 'AV1' },
+                { codec: 'hev1', name: 'H.265/HEVC' },
+                { codec: 'hvc1', name: 'H.265/HEVC' }
+            ];
+            
+            for (const test of videoCodecTests) {
+                const testMime = `video/mp4; codecs="${test.codec}"`;
+                if (video.canPlayType(testMime) !== '') {
+                    detectedVideoCodec = test.name;
+                    break;
+                }
+            }
+            
+            // Test common audio codecs - try different MIME types
+            const audioCodecTests = [
+                { codec: 'mp4a.40.2', mime: 'audio/mp4', name: 'AAC' },
+                { codec: 'mp4a.40.5', mime: 'audio/mp4', name: 'AAC' },
+                { codec: 'mp4a.67', mime: 'audio/mp4', name: 'AAC' },
+                { codec: 'opus', mime: 'audio/webm', name: 'Opus' },
+                { codec: 'vorbis', mime: 'audio/webm', name: 'Vorbis' },
+                { codec: 'vorbis', mime: 'audio/ogg', name: 'Vorbis' },
+                { codec: 'flac', mime: 'audio/mp4', name: 'FLAC' },
+                { codec: 'mp3', mime: 'audio/mpeg', name: 'MP3' }
+            ];
+            
+            for (const test of audioCodecTests) {
+                const testMime = `${test.mime}; codecs="${test.codec}"`;
+                if (video.canPlayType(testMime) !== '') {
+                    detectedAudioCodec = test.name;
+                    break;
+                }
+            }
+            
+            // Also try to detect from file extension if codec detection failed
+            if (!detectedAudioCodec) {
+                const extension = this.currentVideoFile.name.split('.').pop()?.toLowerCase() || '';
+                if (extension === 'mp4' || extension === 'm4v') {
+                    detectedAudioCodec = 'AAC'; // Most common for MP4
+                } else if (extension === 'webm') {
+                    detectedAudioCodec = 'Opus / Vorbis'; // Common for WebM
+                } else if (extension === 'mkv') {
+                    detectedAudioCodec = 'Various'; // MKV can have various audio codecs
+                }
+            }
+        }
+        
+        return {
+            name: this.currentVideoFile.name,
+            size: this.currentVideoFile.size,
+            type: mimeType,
+            detectedVideoCodec: detectedVideoCodec,
+            detectedAudioCodec: detectedAudioCodec,
+            duration: this.videoElement.duration,
+            videoWidth: this.videoElement.videoWidth,
+            videoHeight: this.videoElement.videoHeight,
+            currentTime: this.videoElement.currentTime,
+            playbackRate: this.videoElement.playbackRate,
+            volume: this.videoElement.volume,
+            muted: this.videoElement.muted
+        };
     }
 }
 

@@ -160,6 +160,100 @@ body:not(.platform-darwin) .header {
     pointer-events: none;
 }
 
+/* Skip Indicator (YouTube/Netflix-style) */
+.skip-indicator {
+    position: absolute;
+    top: 50%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    z-index: 20;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-50%) scale(0.9);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.skip-indicator-left {
+    left: 20px;
+}
+
+.skip-indicator-right {
+    right: 20px;
+}
+
+.skip-indicator-show {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+}
+
+.skip-indicator-hide {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.9);
+}
+
+.skip-icon {
+    font-size: 24px;
+    color: var(--text-primary);
+}
+
+.skip-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Volume Indicator */
+.volume-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    z-index: 20;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.volume-indicator-show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.volume-indicator-hide {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+}
+
+.volume-indicator-icon {
+    font-size: 28px;
+    color: var(--accent-primary);
+}
+
+.volume-indicator-text {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    min-width: 50px;
+    text-align: center;
+}
+
 /* Controls Section - Fixed at bottom */
 .controls-section {
     background: var(--bg-secondary);

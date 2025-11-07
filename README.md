@@ -171,12 +171,16 @@ npm run package:linux
 | Key | Action |
 |-----|--------|
 | `Space` | Play/Pause |
-| `←` (Left Arrow) | Seek backward 5 seconds |
-| `→` (Right Arrow) | Seek forward 5 seconds |
+| `←` (Left Arrow) | Seek backward 5 seconds (with visual indicator) |
+| `→` (Right Arrow) | Seek forward 5 seconds (with visual indicator) |
+| `↑` (Up Arrow) | Increase volume by 10% |
+| `↓` (Down Arrow) | Decrease volume by 10% |
 | `F` | Toggle fullscreen |
 | `M` | Toggle mute |
 | `Ctrl/Cmd + O` | Open video file |
 | `Ctrl/Cmd + Shift + O` | Open subtitle file |
+
+**Note:** When seeking forward or backward, a Netflix-style animated indicator appears on screen showing the skip direction and duration.
 
 ## Usage
 

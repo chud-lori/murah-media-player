@@ -24,18 +24,26 @@
                     <button id="subtitleFileBtn" class="file-btn">
                         <i class="fas fa-closed-captioning"></i> Load Subtitle
                     </button>
-                </div>
+            </div>
             </div>
         </header>
 
         <!-- Video Section -->
         <section class="video-section">
             <div id="videoWrapper" class="video-wrapper">
-                <video id="mediaPlayer" preload="auto"></video>
-                <div id="messageOverlay" class="message-overlay">
-                    Please load a video file to begin playback.
+            <video id="mediaPlayer" preload="auto"></video>
+                <div id="skipIndicator" class="skip-indicator">
+                    <i class="skip-icon"></i>
+                    <span class="skip-text"></span>
                 </div>
+                <div id="volumeIndicator" class="volume-indicator">
+                    <i class="volume-indicator-icon"></i>
+                    <span class="volume-indicator-text">100%</span>
+                </div>
+                <div id="messageOverlay" class="message-overlay">
+                Please load a video file to begin playback.
             </div>
+        </div>
         </section>
 
         <!-- Controls Section -->
@@ -60,24 +68,24 @@
                         <i class="fas fa-forward"></i>
                     </button>
                 </div>
-
+                
                 <div class="controls-right">
                     <div class="volume-control">
                         <button id="muteToggleBtn" class="control-btn" title="Mute (M)">
-                            <i id="volumeIcon" class="fas fa-volume-up"></i>
-                        </button>
+                        <i id="volumeIcon" class="fas fa-volume-up"></i>
+                    </button>
                         <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="1" title="Volume" />
                     </div>
-
+                    
                     <select id="speedSelect" class="speed-select" title="Playback Speed">
-                        <option value="0.5">0.5x</option>
-                        <option value="0.75">0.75x</option>
-                        <option value="1.0" selected>1.0x</option>
-                        <option value="1.25">1.25x</option>
-                        <option value="1.5">1.5x</option>
-                        <option value="2.0">2.0x</option>
-                    </select>
-
+                            <option value="0.5">0.5x</option>
+                            <option value="0.75">0.75x</option>
+                            <option value="1.0" selected>1.0x</option>
+                            <option value="1.25">1.25x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2.0">2.0x</option>
+                        </select>
+                    
                     <button id="fullscreenToggleBtn" class="control-btn" title="Fullscreen (F)">
                         <i id="fullscreenIcon" class="fas fa-expand"></i>
                     </button>

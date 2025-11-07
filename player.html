@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Murah Media Player</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="header-title">Murah Media Player</h1>
+            <div class="file-controls">
+                <div class="file-input-wrapper">
+                    <input type="file" id="videoFile" accept="video/*, .mkv, video/x-matroska, video/matroska" />
+                    <button id="videoFileBtn" class="file-btn">
+                        <i class="fas fa-video"></i> Load Video
+                    </button>
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" id="subtitleFile" accept=".srt, .vtt" />
+                    <button id="subtitleFileBtn" class="file-btn">
+                        <i class="fas fa-closed-captioning"></i> Load Subtitle
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Video Section -->
+        <section class="video-section">
+            <div id="videoWrapper" class="video-wrapper">
+                <video id="mediaPlayer" preload="auto"></video>
+                <div id="messageOverlay" class="message-overlay">
+                    Please load a video file to begin playback.
+                </div>
+            </div>
+        </section>
+
+        <!-- Controls Section -->
+        <section class="controls-section">
+            <!-- Seek Bar -->
+            <div class="seek-container">
+                <span id="currentTime" class="time-display">00:00</span>
+                <input type="range" id="seekBar" value="0" min="0" max="0" />
+                <span id="duration" class="time-display">00:00</span>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="controls-row">
+                <div class="controls-left">
+                    <button id="prev5Btn" class="control-btn" title="Seek Backward 5s (Left Arrow)">
+                        <i class="fas fa-backward"></i>
+                    </button>
+                    <button id="playPauseBtn" class="control-btn play-pause-btn" title="Play/Pause (Space)">
+                        <i id="playPauseIcon" class="fas fa-play translate-x-[1px]"></i>
+                    </button>
+                    <button id="next5Btn" class="control-btn" title="Seek Forward 5s (Right Arrow)">
+                        <i class="fas fa-forward"></i>
+                    </button>
+                </div>
+
+                <div class="controls-right">
+                    <div class="volume-control">
+                        <button id="muteToggleBtn" class="control-btn" title="Mute (M)">
+                            <i id="volumeIcon" class="fas fa-volume-up"></i>
+                        </button>
+                        <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="1" title="Volume" />
+                    </div>
+
+                    <select id="speedSelect" class="speed-select" title="Playback Speed">
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1.0" selected>1.0x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2.0">2.0x</option>
+                    </select>
+
+                    <button id="fullscreenToggleBtn" class="control-btn" title="Fullscreen (F)">
+                        <i id="fullscreenIcon" class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Subtitle Controls -->
+            <div class="subtitle-controls">
+                <span class="subtitle-controls-label">Subtitle Styling:</span>
+                <div class="subtitle-options">
+                    <div class="subtitle-option">
+                        <label for="fontSizeInput">Size:</label>
+                        <input type="number" id="fontSizeInput" min="0.5" max="3.0" step="0.1" value="1.8" />
+                    </div>
+                    <div class="subtitle-option">
+                        <label for="colorInput">Color:</label>
+                        <input type="color" id="colorInput" value="#FFFFFF" />
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script type="module" src="scripts/main.js"></script>
+    <script>
+        // Add platform class to body for CSS targeting
+        if (navigator.platform.toLowerCase().includes('mac') || 
+            navigator.userAgent.toLowerCase().includes('mac')) {
+            document.body.classList.add('platform-darwin');
+        }
+        
+        // File input button triggers
+        document.getElementById('videoFileBtn').addEventListener('click', () => {
+            document.getElementById('videoFile').click();
+        });
+
+        document.getElementById('subtitleFileBtn').addEventListener('click', () => {
+            document.getElementById('subtitleFile').click();
+        });
+
+        // Handle Electron menu actions if available
+        if (window.electronAPI) {
+            window.electronAPI.onFileSelected((filePath) => {
+                // Handle file selection from menu
+                // Note: In Electron, we'd need to use fs to read the file
+                // For now, this is a placeholder
+                console.log('File selected from menu:', filePath);
+            });
+
+            window.electronAPI.onSubtitleSelected((filePath) => {
+                console.log('Subtitle selected from menu:', filePath);
+            });
+
+            window.electronAPI.onPlaybackToggle(() => {
+                const playPauseBtn = document.getElementById('playPauseBtn');
+                if (playPauseBtn) playPauseBtn.click();
+            });
+
+            window.electronAPI.onSeek((seconds) => {
+                if (window.videoPlayer) {
+                    window.videoPlayer.seek(seconds);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

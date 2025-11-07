@@ -1,0 +1,12 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#3b82f6"/>
+  
+  <!-- Play button triangle -->
+  <path d="M 180 140 L 180 372 L 372 256 Z" fill="white" opacity="0.95"/>
+  
+  <!-- Video frame lines -->
+  <rect x="100" y="100" width="312" height="312" fill="none" stroke="white" stroke-width="8" opacity="0.3"/>
+  <rect x="120" y="120" width="272" height="272" fill="none" stroke="white" stroke-width="6" opacity="0.2"/>
+</svg>
+

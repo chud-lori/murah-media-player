@@ -37,10 +37,14 @@
       "!.git/**/*",
       "!.gitignore",
       "!README.md",
-      "!package-lock.json"
+      "!package-lock.json",
+      "build/ICON_INSTRUCTIONS.md",
+      "build/generate-icons.sh",
+      "build/icon.svg"
     ],
     "mac": {
       "category": "public.app-category.entertainment",
+      "icon": "build/icons/icon.icns",
       "target": [
         {
           "target": "dmg",
@@ -53,6 +57,7 @@
       ]
     },
     "win": {
+      "icon": "build/icons/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -65,6 +70,7 @@
       ]
     },
     "linux": {
+      "icon": "build/icons/icon.png",
       "target": [
         "AppImage",
         "deb"

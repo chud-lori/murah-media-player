@@ -1,6 +1,6 @@
 # Murah Media Player
 
-A modern, desktop-first video player built with Electron. Features a clean, native desktop interface with no scrolling, comprehensive playback controls, and subtitle support.
+I was initiate this (vibe-coded) because when I try to play MKV in mac os with srt subtitle, it's hard to find a proper media player, and we know that lot of app in apple environment is paid, that's when it comes an idea to build this player. Simple, but has enough feature for your basic needs to play a video.
 
 ![Murah Media Player](https://img.shields.io/badge/Electron-18.18.2-blue)
 ![License](https://img.shields.io/badge/license-ISC-green)
@@ -172,8 +172,68 @@ web-based-video-player/
 
 ## Known Issues
 
-- **MKV Audio Codec**: Some MKV files use AC3 (Dolby Digital) audio codec which browsers cannot decode natively. You may need to re-encode the audio track to AAC.
-- **macOS Menu Bar**: When running in development mode (`npm start`), the menu bar may show "Electron" instead of "Murah Media Player". This is normal in development and will be correct in the built application.
+### MKV Files with AC3 Audio Codec
+
+Some MKV files use the AC3 (Dolby Digital) audio codec, which web browsers and Electron cannot decode natively. If you encounter playback issues with an MKV file (no audio, error messages, or the video won't play), the audio track likely uses an unsupported codec.
+
+#### Checking Audio Codec
+
+To check if your video file uses AC3 audio, use `ffprobe` (part of [FFmpeg](https://ffmpeg.org/)):
+
+```bash
+ffprobe -hide_banner -show_streams "video.mkv" | grep "codec_name"
+```
+
+This command will display the codec names for all streams in the file. If you see `ac3` in the output, the audio track uses AC3 and needs to be converted.
+
+**Example output:**
+```
+codec_name=h264    # Video codec (usually fine)
+codec_name=ac3     # Audio codec (needs conversion)
+```
+
+#### Converting AC3 to AAC
+
+If your video uses AC3 audio, you can convert it to AAC (which is widely supported) using FFmpeg. This process will:
+
+- **Copy the video stream** (no re-encoding, fast and preserves quality)
+- **Re-encode only the audio** to AAC format
+- **Preserve all other tracks** (subtitles, chapters, etc.)
+
+**Conversion Command:**
+
+```bash
+ffmpeg -i "input.mkv" -c:v copy -c:a aac -b:a 256k "output.mkv"
+```
+
+**Command Breakdown:**
+- `-i "input.mkv"` - Input video file
+- `-c:v copy` - Copy video stream without re-encoding (fast, preserves quality)
+- `-c:a aac` - Re-encode audio to AAC codec
+- `-b:a 256k` - Set audio bitrate to 256 kbps (good quality, adjust as needed)
+- `"output.mkv"` - Output filename
+
+**Alternative: Higher Quality Audio**
+
+For better audio quality, you can increase the bitrate:
+
+```bash
+ffmpeg -i "input.mkv" -c:v copy -c:a aac -b:a 320k "output.mkv"
+```
+
+**Note:** The conversion process may take some time depending on the file size. The video quality remains unchanged since we're only re-encoding the audio track.
+
+#### Installing FFmpeg
+
+If you don't have FFmpeg installed:
+
+- **macOS**: `brew install ffmpeg`
+- **Windows**: Download from [FFmpeg website](https://ffmpeg.org/download.html) or use `choco install ffmpeg`
+- **Linux**: `sudo apt install ffmpeg` (Debian/Ubuntu) or `sudo yum install ffmpeg` (RHEL/CentOS)
+
+### macOS Menu Bar
+
+When running in development mode (`npm start`), the menu bar may show "Electron" instead of "Murah Media Player". This is normal in development and will be correct in the built application.
 
 ## Contributing
 

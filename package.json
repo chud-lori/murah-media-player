@@ -1,7 +1,7 @@
 {
-  "name": "electron-video-player",
+  "name": "murah-media-player",
   "version": "1.0.0",
-  "description": "A modern desktop video player built with Electron.",
+  "description": "A free and open source media player, build due to insufficient money to pay paid media player.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

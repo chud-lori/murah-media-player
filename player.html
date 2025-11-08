@@ -11,8 +11,17 @@
     <div class="app-container">
         <!-- Header -->
         <header class="header">
-            <h1 class="header-title">Murah Media Player</h1>
+            <h1 class="header-title" id="headerTitle">Murah Media Player</h1>
             <div class="file-controls">
+                <button id="alwaysOnTopBtn" class="control-btn" title="Always on Top (T)">
+                    <i id="alwaysOnTopIcon" class="fas fa-thumbtack"></i>
+                </button>
+                <button id="videoInfoBtn" class="control-btn" title="Video Info (I)">
+                    <i class="fas fa-info-circle"></i>
+                </button>
+                <button id="keyboardHelpBtn" class="control-btn" title="Keyboard Shortcuts (?)">
+                    <i class="fas fa-question-circle"></i>
+                </button>
                 <div class="file-input-wrapper">
                     <input type="file" id="videoFile" accept="video/*, .mkv, video/x-matroska, video/matroska" />
                     <button id="videoFileBtn" class="file-btn">
@@ -32,6 +41,7 @@
         <section class="video-section">
             <div id="videoWrapper" class="video-wrapper">
             <video id="mediaPlayer" preload="auto"></video>
+            <video id="previewVideo" style="display: none; position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;" preload="auto" muted playsinline></video>
                 <div id="skipIndicator" class="skip-indicator">
                     <i class="skip-icon"></i>
                     <span class="skip-text"></span>
@@ -39,6 +49,10 @@
                 <div id="volumeIndicator" class="volume-indicator">
                     <i class="volume-indicator-icon"></i>
                     <span class="volume-indicator-text">100%</span>
+                </div>
+                <div id="loadingIndicator" class="loading-indicator hidden">
+                    <div class="loading-spinner"></div>
+                    <span class="loading-text">Loading...</span>
                 </div>
                 <div id="messageOverlay" class="message-overlay">
                 Please load a video file to begin playback.
@@ -51,7 +65,16 @@
             <!-- Seek Bar -->
             <div class="seek-container">
                 <span id="currentTime" class="time-display">00:00</span>
-                <input type="range" id="seekBar" value="0" min="0" max="0" />
+                <div class="seek-bar-wrapper">
+                    <input type="range" id="seekBar" value="0" min="0" max="0" />
+                    <div id="seekBarTooltip" class="seek-bar-tooltip">00:00</div>
+                    <div id="seekBarPreview" class="seek-bar-preview hidden">
+                        <div class="seek-preview-thumbnail">
+                            <canvas id="seekPreviewCanvas"></canvas>
+                        </div>
+                        <div class="seek-preview-time">00:00</div>
+                    </div>
+                </div>
                 <span id="duration" class="time-display">00:00</span>
             </div>
 
@@ -107,6 +130,34 @@
                 </div>
             </div>
         </section>
+
+        <!-- Video Info Panel -->
+        <div id="videoInfoPanel" class="video-info-panel hidden">
+            <div class="video-info-header">
+                <h3>Video Information</h3>
+                <button id="closeVideoInfoBtn" class="control-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="video-info-content" id="videoInfoContent">
+                <p>No video loaded</p>
+            </div>
+        </div>
+
+        <!-- Keyboard Shortcuts Help Overlay -->
+        <div id="keyboardHelpOverlay" class="keyboard-help-overlay hidden">
+            <div class="keyboard-help-content">
+                <div class="keyboard-help-header">
+                    <h2>Keyboard Shortcuts</h2>
+                    <button id="closeKeyboardHelpBtn" class="control-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="keyboard-help-list" id="keyboardHelpList">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="scripts/main.js"></script>
@@ -147,6 +198,17 @@
             window.electronAPI.onSeek((seconds) => {
                 if (window.videoPlayer) {
                     window.videoPlayer.seek(seconds);
+                }
+            });
+
+            window.electronAPI.onToggleVideoInfo(() => {
+                // Trigger video info panel toggle
+                if (window.controlsHandler) {
+                    window.controlsHandler.toggleVideoInfoPanel();
+                } else {
+                    // Fallback: find the button and click it
+                    const videoInfoBtn = document.getElementById('videoInfoBtn');
+                    if (videoInfoBtn) videoInfoBtn.click();
                 }
             });
         }

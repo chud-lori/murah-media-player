@@ -11,7 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const videoPlayer = new VideoPlayer();
     const controlsHandler = new ControlsHandler(videoPlayer);
     
-    // Make videoPlayer globally accessible for debugging if needed
+    // Make videoPlayer and controlsHandler globally accessible
     window.videoPlayer = videoPlayer;
+    window.controlsHandler = controlsHandler;
 });
 

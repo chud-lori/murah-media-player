@@ -12,6 +12,11 @@ export class VideoPlayer {
         this.loadingIndicator = document.getElementById('loadingIndicator');
         this.headerTitle = document.getElementById('headerTitle');
 
+        // New: Reference to the main video container for fullscreen and cursor control
+        this.videoWrapper = document.getElementById('videoWrapper');
+        // New: Timer for hiding the cursor after inactivity
+        this.cursorTimeout = null;
+
         this.subTitleFontSize = 1.8;
         this.subTitleColor = '#FFFFFF';
         this.lastVolume = 1.0;
@@ -31,6 +36,9 @@ export class VideoPlayer {
         this.setupEventListeners();
         this.updateSubtitleStyles();
         this.showMessage("Ready. Select a video file to start.");
+
+        // Fix: Explicitly set the video element cursor to 'default' on init
+        this.videoElement.style.cursor = 'default';
     }
 
     setupEventListeners() {
@@ -85,6 +93,25 @@ export class VideoPlayer {
 
         // Load saved playback position
         this.loadPlaybackPosition();
+
+        // --- START: Cursor Control (Updated) ---
+
+        if (this.videoWrapper) {
+            // Handles showing cursor and setting hide timer on movement in all modes (fullscreen/default)
+            this.videoWrapper.addEventListener('mousemove', () => this.handleMouseMove());
+
+            // NEW: Crucial for hiding cursor in non-fullscreen mode
+            // Resets cursor to visible and clears the timer when the mouse leaves the video wrapper.
+            this.videoWrapper.addEventListener('mouseleave', () => this.handleMouseLeave());
+        }
+
+        // Listen for fullscreen change events (cross-browser compatibility)
+        document.addEventListener('fullscreenchange', () => this.handleFullscreenChange());
+        document.addEventListener('webkitfullscreenchange', () => this.handleFullscreenChange());
+        document.addEventListener('mozfullscreenchange', () => this.handleFullscreenChange());
+        document.addEventListener('msfullscreenchange', () => this.handleFullscreenChange());
+
+        // --- END: Cursor Control ---
     }
 
     handleVideoFile(event) {
@@ -440,29 +467,29 @@ export class VideoPlayer {
     }
 
     toggleFullscreen() {
-        const videoWrapper = document.getElementById('videoWrapper');
-        if (!videoWrapper) return;
+        // We use this.videoWrapper which is initialized in the constructor
+        if (!this.videoWrapper) return;
 
         if (document.fullscreenElement) {
             document.exitFullscreen();
         } else {
-            if (videoWrapper.requestFullscreen) {
-                videoWrapper.requestFullscreen();
-            } else if (videoWrapper.webkitRequestFullscreen) {
-                videoWrapper.webkitRequestFullscreen();
-            } else if (videoWrapper.mozRequestFullScreen) {
-                videoWrapper.mozRequestFullScreen();
+            if (this.videoWrapper.requestFullscreen) {
+                this.videoWrapper.requestFullscreen();
+            } else if (this.videoWrapper.webkitRequestFullscreen) {
+                this.videoWrapper.webkitRequestFullscreen();
+            } else if (this.videoWrapper.mozRequestFullScreen) {
+                this.videoWrapper.mozRequestFullScreen();
             }
         }
     }
 
     setupDragAndDrop() {
-        const videoWrapper = document.getElementById('videoWrapper');
-        if (!videoWrapper) return;
+        // Uses this.videoWrapper which is initialized in the constructor
+        if (!this.videoWrapper) return;
 
         // Prevent default drag behaviors
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            videoWrapper.addEventListener(eventName, (e) => {
+            this.videoWrapper.addEventListener(eventName, (e) => {
                 e.preventDefault();
                 e.stopPropagation();
             }, false);
@@ -470,19 +497,19 @@ export class VideoPlayer {
 
         // Highlight drop zone
         ['dragenter', 'dragover'].forEach(eventName => {
-            videoWrapper.addEventListener(eventName, () => {
-                videoWrapper.classList.add('drag-over');
+            this.videoWrapper.addEventListener(eventName, () => {
+                this.videoWrapper.classList.add('drag-over');
             }, false);
         });
 
         ['dragleave', 'drop'].forEach(eventName => {
-            videoWrapper.addEventListener(eventName, () => {
-                videoWrapper.classList.remove('drag-over');
+            this.videoWrapper.addEventListener(eventName, () => {
+                this.videoWrapper.classList.remove('drag-over');
             }, false);
         });
 
         // Handle dropped files
-        videoWrapper.addEventListener('drop', (e) => {
+        this.videoWrapper.addEventListener('drop', (e) => {
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 const file = files[0];
@@ -641,5 +668,78 @@ export class VideoPlayer {
             muted: this.videoElement.muted
         };
     }
-}
 
+    // --- CURSOR CONTROL METHODS ---
+
+    /**
+     * Toggles cursor visibility logic based on fullscreen status.
+     * Called by cross-browser fullscreen change events.
+     */
+    handleFullscreenChange() {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        // Ensure both elements exist before proceeding
+        if (!this.videoWrapper || !this.videoElement) return;
+
+        if (isFullscreen) {
+            // When entering fullscreen, ensure cursor is default on both elements and start timer
+            this.videoWrapper.style.cursor = 'default';
+            this.videoElement.style.cursor = 'default';
+            this.handleMouseMove();
+        } else {
+            // When exiting fullscreen, ensure cursor is visible and stop the timer.
+            if (this.cursorTimeout) {
+                clearTimeout(this.cursorTimeout);
+                this.cursorTimeout = null;
+            }
+            // Reset both cursors to 'default' (visible)
+            this.videoWrapper.style.cursor = 'default';
+            this.videoElement.style.cursor = 'default';
+        }
+    }
+
+    /**
+     * Shows the cursor and resets the 3-second timer to hide it.
+     * This runs whenever the mouse moves over the video wrapper (in any mode).
+     */
+    handleMouseMove() {
+        if (!this.videoWrapper || !this.videoElement) return;
+
+        // 1. Show the cursor immediately upon movement
+        this.videoWrapper.style.cursor = 'default';
+        this.videoElement.style.cursor = 'default';
+
+        // 2. Clear any existing hide timer
+        if (this.cursorTimeout) {
+            clearTimeout(this.cursorTimeout);
+        }
+
+        // 3. Set a new timer to hide the cursor after 3 seconds of inactivity
+        this.cursorTimeout = setTimeout(() => {
+            // Hide cursor on both elements
+            this.videoWrapper.style.cursor = 'none';
+            this.videoElement.style.cursor = 'none';
+        }, 3000);
+    }
+
+    /**
+     * NEW: Ensures cursor is visible when the mouse leaves the video area
+     * in non-fullscreen mode, and cancels the timer.
+     */
+    handleMouseLeave() {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        // ONLY perform this action if NOT in fullscreen
+        if (!isFullscreen && this.videoWrapper && this.videoElement) {
+            // 1. Ensure cursor is visible when leaving the video area
+            this.videoWrapper.style.cursor = 'default';
+            this.videoElement.style.cursor = 'default';
+
+            // 2. Clear the hide timer
+            if (this.cursorTimeout) {
+                clearTimeout(this.cursorTimeout);
+                this.cursorTimeout = null;
+            }
+        }
+    }
+}

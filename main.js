@@ -27,7 +27,7 @@ function createWindow() {
     });
 
     mainWindow.loadFile('player.html');
-    
+
     // Ensure title is set after load
     mainWindow.once('ready-to-show', () => {
         mainWindow.setTitle('Murah Media Player');
@@ -50,14 +50,14 @@ function setupIpcHandlers() {
         }
         return false;
     });
-    
+
     ipcMain.handle('is-always-on-top', () => {
         if (mainWindow) {
             return mainWindow.isAlwaysOnTop();
         }
         return false;
     });
-    
+
     ipcMain.on('toggle-always-on-top', () => {
         if (mainWindow) {
             const isAlwaysOnTop = mainWindow.isAlwaysOnTop();
@@ -222,7 +222,7 @@ function createMenu() {
                                 type: 'info',
                                 title: 'About',
                                 message: 'Murah Media Player',
-                                detail: 'A modern desktop video player built with Electron.\n\nVersion 1.0.0'
+                                detail: 'A free and open source media player, build due to insufficient money to pay paid media player.\n\nVersion 1.0.0'
                             });
                         }
                     }
@@ -238,7 +238,7 @@ function createMenu() {
         template.unshift({
             label: appName,
             submenu: [
-                { 
+                {
                     label: `About ${appName}`,
                     click: () => {
                         if (mainWindow) {
@@ -246,7 +246,7 @@ function createMenu() {
                                 type: 'info',
                                 title: `About ${appName}`,
                                 message: appName,
-                                detail: 'A modern desktop video player built with Electron.\n\nVersion 1.0.0'
+                                detail: 'A free and open source media player, build due to insufficient money to pay paid media player.\n\nVersion 1.0.0'
                             });
                         }
                     }

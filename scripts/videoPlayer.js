@@ -11,33 +11,33 @@ export class VideoPlayer {
         this.messageOverlay = document.getElementById('messageOverlay');
         this.loadingIndicator = document.getElementById('loadingIndicator');
         this.headerTitle = document.getElementById('headerTitle');
-        
+
         this.subTitleFontSize = 1.8;
         this.subTitleColor = '#FFFFFF';
         this.lastVolume = 1.0;
         this.currentVideoFile = null;
         this.currentVideoPath = null;
         this.lastSavedSecond = null;
-        
+
         this.init();
     }
-    
+
     // Getter for video element (for backward compatibility)
     get videoPlayer() {
         return this.videoElement;
     }
-    
+
     init() {
         this.setupEventListeners();
         this.updateSubtitleStyles();
         this.showMessage("Ready. Select a video file to start.");
     }
-    
+
     setupEventListeners() {
         // File loading
         this.videoFileInput.addEventListener('change', (e) => this.handleVideoFile(e));
         this.subtitleFileInput.addEventListener('change', (e) => this.handleSubtitleFile(e));
-        
+
         // Video events
         this.videoElement.addEventListener('loadstart', () => this.onLoadStart());
         this.videoElement.addEventListener('loadedmetadata', () => this.onMetadataLoaded());
@@ -50,11 +50,11 @@ export class VideoPlayer {
         this.videoElement.addEventListener('pause', () => this.onPause());
         this.videoElement.addEventListener('ended', () => this.onEnded());
         this.videoElement.addEventListener('error', (e) => this.onError(e));
-        
+
         // Double-click to toggle fullscreen
         let clickTimeout = null;
         let clickCount = 0;
-        
+
         this.videoElement.addEventListener('click', (e) => {
             clickCount++;
             if (clickTimeout) {
@@ -69,7 +69,7 @@ export class VideoPlayer {
                 clickTimeout = null;
             }, 300);
         });
-        
+
         this.videoElement.addEventListener('dblclick', (e) => {
             e.preventDefault();
             clickCount = 0;
@@ -79,36 +79,36 @@ export class VideoPlayer {
             }
             this.toggleFullscreen();
         });
-        
+
         // Drag and drop support
         this.setupDragAndDrop();
-        
+
         // Load saved playback position
         this.loadPlaybackPosition();
     }
-    
+
     handleVideoFile(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
+
         this.loadVideoFile(file);
     }
-    
+
     loadVideoFile(file) {
         // Revoke old URL if exists
         if (this.videoElement.src) {
             URL.revokeObjectURL(this.videoElement.src);
         }
-        
+
         this.currentVideoFile = file;
         this.currentVideoPath = file.name; // Store filename for localStorage key
         this.lastSavedSecond = null; // Reset saved position tracker
-        
+
         // Create local URL for selected file
         const videoUrl = URL.createObjectURL(file);
         this.videoElement.src = videoUrl;
         this.videoElement.load();
-        
+
         // Sync preview video source
         const previewVideo = document.getElementById('previewVideo');
         if (previewVideo) {
@@ -117,26 +117,26 @@ export class VideoPlayer {
             // Ensure preview video is paused (we only use it for frame capture)
             previewVideo.pause();
         }
-        
+
         this.hideMessage();
         this.showMessage("Video loaded. Press Play.");
-        
+
         // Reset playback speed
         this.videoElement.playbackRate = 1.0;
         const speedSelect = document.getElementById('speedSelect');
         if (speedSelect) speedSelect.value = "1.0";
-        
+
         // Update file button state
         const videoBtn = document.getElementById('videoFileBtn');
         if (videoBtn) {
             videoBtn.classList.add('has-file');
             videoBtn.innerHTML = `<i class="fas fa-check"></i> ${file.name}`;
         }
-        
+
         // Update header title
         this.updateHeaderTitle(file.name);
     }
-    
+
     updateHeaderTitle(title) {
         if (this.headerTitle) {
             // Remove file extension for cleaner display
@@ -144,24 +144,24 @@ export class VideoPlayer {
             this.headerTitle.textContent = nameWithoutExt || 'Murah Media Player';
         }
     }
-    
+
     handleSubtitleFile(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
+
         const reader = new FileReader();
         reader.onload = (e) => {
             const srtContent = e.target.result;
             const vttContent = this.srtToVtt(srtContent);
-            
+
             // Convert to Blob
             const vttBlob = new Blob([vttContent], { type: 'text/vtt' });
             const vttUrl = URL.createObjectURL(vttBlob);
-            
+
             // Remove existing tracks
             const existingTracks = this.videoElement.querySelectorAll('track');
             existingTracks.forEach(track => track.remove());
-            
+
             // Create and append new track
             const track = document.createElement('track');
             track.kind = 'subtitles';
@@ -169,16 +169,16 @@ export class VideoPlayer {
             track.srclang = 'en';
             track.src = vttUrl;
             track.default = true;
-            
+
             this.videoElement.appendChild(track);
-            
+
             console.log("Subtitles loaded successfully.");
             if (this.videoElement.src) {
                 this.showMessage("Subtitles loaded. Click 'Play' or load a video.");
             } else {
                 this.showMessage("Subtitles loaded. Now load a video file.");
             }
-            
+
             // Update file button state
             const subtitleBtn = document.getElementById('subtitleFileBtn');
             if (subtitleBtn) {
@@ -186,58 +186,58 @@ export class VideoPlayer {
                 subtitleBtn.innerHTML = `<i class="fas fa-check"></i> ${file.name}`;
             }
         };
-        
+
         reader.onerror = () => {
             this.showMessage("Error reading subtitle file.");
         };
-        
+
         reader.readAsText(file);
     }
-    
+
     onLoadStart() {
         this.showLoading();
     }
-    
+
     onLoadedData() {
         // Restore playback position after metadata is loaded
         this.restorePlaybackPosition();
     }
-    
+
     onCanPlay() {
         this.hideLoading();
     }
-    
+
     onWaiting() {
         this.showLoading();
     }
-    
+
     onPlaying() {
         this.hideLoading();
     }
-    
+
     onMetadataLoaded() {
         this.videoElement.volume = 1.0;
         const volumeSlider = document.getElementById('volumeSlider');
         if (volumeSlider) volumeSlider.value = 1.0;
         this.updateVolumeIcon(1.0);
-        
+
         const seekBar = document.getElementById('seekBar');
         const durationDisplay = document.getElementById('duration');
         if (seekBar) seekBar.max = this.videoElement.duration;
         if (durationDisplay) durationDisplay.textContent = this.formatTime(this.videoElement.duration);
     }
-    
+
     onTimeUpdate() {
         const seekBar = document.getElementById('seekBar');
         const currentTimeDisplay = document.getElementById('currentTime');
-        
+
         if (!seekBar.isDragging && seekBar) {
             seekBar.value = this.videoElement.currentTime;
         }
         if (currentTimeDisplay) {
             currentTimeDisplay.textContent = this.formatTime(this.videoElement.currentTime);
         }
-        
+
         // Save playback position periodically (every 5 seconds)
         if (this.currentVideoPath && this.videoElement.currentTime > 0) {
             const currentSecond = Math.floor(this.videoElement.currentTime);
@@ -249,7 +249,7 @@ export class VideoPlayer {
             }
         }
     }
-    
+
     onPlay() {
         this.hideMessage();
         const playPauseIcon = document.getElementById('playPauseIcon');
@@ -258,7 +258,7 @@ export class VideoPlayer {
             playPauseIcon.classList.add('fa-pause', 'translate-x-0');
         }
     }
-    
+
     onPause() {
         const playPauseIcon = document.getElementById('playPauseIcon');
         if (playPauseIcon) {
@@ -266,7 +266,7 @@ export class VideoPlayer {
             playPauseIcon.classList.add('fa-play', 'translate-x-[1px]');
         }
     }
-    
+
     onEnded() {
         const playPauseIcon = document.getElementById('playPauseIcon');
         if (playPauseIcon) {
@@ -275,26 +275,26 @@ export class VideoPlayer {
         }
         this.showMessage("Playback finished!");
     }
-    
+
     onError(e) {
         console.error("Video Error:", this.videoElement.error, e);
         const errorCode = this.videoElement.error ? this.videoElement.error.code : 'Unknown';
         this.showMessage(`Video playback error: Code ${errorCode}. Please check video codec support.`);
     }
-    
+
     onVideoClick() {
         if (this.videoElement.src) {
             const playPauseBtn = document.getElementById('playPauseBtn');
             if (playPauseBtn) playPauseBtn.click();
         }
     }
-    
+
     togglePlayPause() {
         if (!this.videoElement.src) {
             this.showMessage("Please load a video file first!");
             return;
         }
-        
+
         if (this.videoElement.paused || this.videoElement.ended) {
             this.videoElement.play()
                 .then(() => {
@@ -308,17 +308,17 @@ export class VideoPlayer {
             this.videoElement.pause();
         }
     }
-    
+
     seek(seconds) {
         if (this.videoElement.duration) {
             this.videoElement.currentTime = Math.max(0, Math.min(this.videoElement.duration, this.videoElement.currentTime + seconds));
         }
     }
-    
+
     setVolume(volume) {
         this.videoElement.volume = volume;
         this.updateVolumeIcon(volume);
-        
+
         if (volume > 0) {
             this.videoElement.muted = false;
             this.lastVolume = volume;
@@ -326,7 +326,7 @@ export class VideoPlayer {
             this.videoElement.muted = true;
         }
     }
-    
+
     toggleMute() {
         if (this.videoElement.muted || this.videoElement.volume === 0) {
             this.videoElement.muted = false;
@@ -343,17 +343,17 @@ export class VideoPlayer {
             this.updateVolumeIcon(0);
         }
     }
-    
+
     setPlaybackRate(rate) {
         if (this.videoElement.src) {
             this.videoElement.playbackRate = parseFloat(rate);
         }
     }
-    
+
     updateVolumeIcon(volume) {
         const volumeIcon = document.getElementById('volumeIcon');
         if (!volumeIcon) return;
-        
+
         volumeIcon.className = 'fas';
         if (this.videoElement.muted || volume === 0) {
             volumeIcon.classList.add('fa-volume-mute');
@@ -363,7 +363,7 @@ export class VideoPlayer {
             volumeIcon.classList.add('fa-volume-down');
         }
     }
-    
+
     updateSubtitleStyles() {
         const styleId = 'subtitleStyles';
         let style = document.getElementById(styleId);
@@ -372,7 +372,7 @@ export class VideoPlayer {
             style.id = styleId;
             document.head.appendChild(style);
         }
-        
+
         style.textContent = `
             video::cue {
                 color: ${this.subTitleColor} !important;
@@ -383,7 +383,7 @@ export class VideoPlayer {
             }
         `;
     }
-    
+
     setSubtitleFontSize(size) {
         let val = parseFloat(size);
         if (val < 0.5) val = 0.5;
@@ -391,58 +391,58 @@ export class VideoPlayer {
         this.subTitleFontSize = val;
         this.updateSubtitleStyles();
     }
-    
+
     setSubtitleColor(color) {
         this.subTitleColor = color;
         this.updateSubtitleStyles();
     }
-    
+
     showMessage(text) {
         if (this.messageOverlay) {
             this.messageOverlay.textContent = text;
             this.messageOverlay.classList.remove('hidden');
         }
     }
-    
+
     hideMessage() {
         if (this.messageOverlay) {
             this.messageOverlay.classList.add('hidden');
         }
     }
-    
+
     formatTime(seconds) {
         if (isNaN(seconds) || seconds < 0) return '00:00';
         const date = new Date(null);
         date.setSeconds(seconds);
         const result = date.toISOString().substring(11, 19);
-        
+
         if (seconds >= 3600) {
             return result;
         }
         return result.substring(3);
     }
-    
+
     srtToVtt(srtContent) {
         const vttContent = srtContent.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
         return 'WEBVTT\n\n' + vttContent;
     }
-    
+
     showLoading() {
         if (this.loadingIndicator) {
             this.loadingIndicator.classList.remove('hidden');
         }
     }
-    
+
     hideLoading() {
         if (this.loadingIndicator) {
             this.loadingIndicator.classList.add('hidden');
         }
     }
-    
+
     toggleFullscreen() {
         const videoWrapper = document.getElementById('videoWrapper');
         if (!videoWrapper) return;
-        
+
         if (document.fullscreenElement) {
             document.exitFullscreen();
         } else {
@@ -455,11 +455,11 @@ export class VideoPlayer {
             }
         }
     }
-    
+
     setupDragAndDrop() {
         const videoWrapper = document.getElementById('videoWrapper');
         if (!videoWrapper) return;
-        
+
         // Prevent default drag behaviors
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             videoWrapper.addEventListener(eventName, (e) => {
@@ -467,27 +467,27 @@ export class VideoPlayer {
                 e.stopPropagation();
             }, false);
         });
-        
+
         // Highlight drop zone
         ['dragenter', 'dragover'].forEach(eventName => {
             videoWrapper.addEventListener(eventName, () => {
                 videoWrapper.classList.add('drag-over');
             }, false);
         });
-        
+
         ['dragleave', 'drop'].forEach(eventName => {
             videoWrapper.addEventListener(eventName, () => {
                 videoWrapper.classList.remove('drag-over');
             }, false);
         });
-        
+
         // Handle dropped files
         videoWrapper.addEventListener('drop', (e) => {
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 const file = files[0];
                 // Check if it's a video file
-                if (file.type.startsWith('video/') || 
+                if (file.type.startsWith('video/') ||
                     file.name.match(/\.(mp4|mkv|webm|avi|mov|m4v)$/i)) {
                     this.loadVideoFile(file);
                 } else if (file.name.match(/\.(srt|vtt)$/i)) {
@@ -498,14 +498,14 @@ export class VideoPlayer {
             }
         }, false);
     }
-    
+
     savePlaybackPosition() {
         if (!this.currentVideoPath || !this.videoElement.duration) return;
-        
+
         const key = `playback_position_${this.currentVideoPath}`;
         const position = this.videoElement.currentTime;
         const duration = this.videoElement.duration;
-        
+
         // Only save if video is more than 10 seconds long and we're past 5 seconds
         if (duration > 10 && position > 5) {
             localStorage.setItem(key, JSON.stringify({
@@ -515,17 +515,17 @@ export class VideoPlayer {
             }));
         }
     }
-    
+
     loadPlaybackPosition() {
         // This will be called after metadata is loaded
     }
-    
+
     restorePlaybackPosition() {
         if (!this.currentVideoPath || !this.videoElement.duration) return;
-        
+
         const key = `playback_position_${this.currentVideoPath}`;
         const saved = localStorage.getItem(key);
-        
+
         if (saved) {
             try {
                 const data = JSON.parse(saved);
@@ -542,12 +542,12 @@ export class VideoPlayer {
             }
         }
     }
-    
+
     getVideoInfo() {
         if (!this.videoElement.src || !this.currentVideoFile) {
             return null;
         }
-        
+
         // Try to get MIME type from file, or detect from extension
         let mimeType = this.currentVideoFile.type;
         if (!mimeType || mimeType === '' || mimeType === 'application/octet-stream') {
@@ -567,7 +567,7 @@ export class VideoPlayer {
             };
             mimeType = mimeTypeMap[extension] || 'video/unknown';
         }
-        
+
         // Try to detect codec from video element
         let detectedVideoCodec = null;
         let detectedAudioCodec = null;
@@ -584,7 +584,7 @@ export class VideoPlayer {
                 { codec: 'hev1', name: 'H.265/HEVC' },
                 { codec: 'hvc1', name: 'H.265/HEVC' }
             ];
-            
+
             for (const test of videoCodecTests) {
                 const testMime = `video/mp4; codecs="${test.codec}"`;
                 if (video.canPlayType(testMime) !== '') {
@@ -592,7 +592,7 @@ export class VideoPlayer {
                     break;
                 }
             }
-            
+
             // Test common audio codecs - try different MIME types
             const audioCodecTests = [
                 { codec: 'mp4a.40.2', mime: 'audio/mp4', name: 'AAC' },
@@ -604,7 +604,7 @@ export class VideoPlayer {
                 { codec: 'flac', mime: 'audio/mp4', name: 'FLAC' },
                 { codec: 'mp3', mime: 'audio/mpeg', name: 'MP3' }
             ];
-            
+
             for (const test of audioCodecTests) {
                 const testMime = `${test.mime}; codecs="${test.codec}"`;
                 if (video.canPlayType(testMime) !== '') {
@@ -612,7 +612,7 @@ export class VideoPlayer {
                     break;
                 }
             }
-            
+
             // Also try to detect from file extension if codec detection failed
             if (!detectedAudioCodec) {
                 const extension = this.currentVideoFile.name.split('.').pop()?.toLowerCase() || '';
@@ -625,7 +625,7 @@ export class VideoPlayer {
                 }
             }
         }
-        
+
         return {
             name: this.currentVideoFile.name,
             size: this.currentVideoFile.size,

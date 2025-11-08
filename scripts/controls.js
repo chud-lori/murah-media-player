@@ -13,6 +13,7 @@ export class ControlsHandler {
     }
     
     init() {
+        console.log('ControlsHandler init starting...');
         this.setupControlButtons();
         this.setupSeekBar();
         this.setupVolumeControls();
@@ -23,6 +24,7 @@ export class ControlsHandler {
         this.setupAlwaysOnTop();
         this.setupVideoInfoPanel();
         this.setupKeyboardHelp();
+        console.log('ControlsHandler init completed');
     }
     
     setupControlButtons() {
@@ -32,7 +34,17 @@ export class ControlsHandler {
         const fullscreenBtn = document.getElementById('fullscreenToggleBtn');
         
         if (playPauseBtn) {
-            playPauseBtn.addEventListener('click', () => this.videoPlayer.togglePlayPause());
+            // Add debouncing to prevent rapid play/pause when holding button
+            let isProcessing = false;
+            playPauseBtn.addEventListener('click', () => {
+                if (isProcessing) return;
+                isProcessing = true;
+                this.videoPlayer.togglePlayPause();
+                // Reset after a short delay to prevent rapid toggling
+                setTimeout(() => {
+                    isProcessing = false;
+                }, 200);
+            });
         }
         
         if (prev5Btn) {
@@ -320,10 +332,105 @@ export class ControlsHandler {
     
     setupSpeedControl() {
         const speedSelect = document.getElementById('speedSelect');
+        const speedUpBtn = document.getElementById('speedUpBtn');
+        const speedDownBtn = document.getElementById('speedDownBtn');
+        
         if (speedSelect) {
             speedSelect.addEventListener('change', (e) => {
                 this.videoPlayer.setPlaybackRate(e.target.value);
             });
+        }
+        
+        if (speedUpBtn) {
+            speedUpBtn.addEventListener('click', () => {
+                this.adjustSpeed(0.25);
+            });
+        }
+        
+        if (speedDownBtn) {
+            speedDownBtn.addEventListener('click', () => {
+                this.adjustSpeed(-0.25);
+            });
+        }
+    }
+    
+    adjustSpeed(delta) {
+        const speedSelect = document.getElementById('speedSelect');
+        if (!speedSelect) return;
+
+        const options = Array.from(speedSelect.options);
+        const currentSpeedValue = parseFloat(speedSelect.value).toFixed(2);
+        const currentIndex = options.findIndex(option => parseFloat(option.value).toFixed(2) === currentSpeedValue);
+
+        if (currentIndex === -1) return; // Should not happen
+
+        let newIndex = currentIndex + (delta > 0 ? 1 : -1);
+        newIndex = Math.max(0, Math.min(options.length - 1, newIndex));
+
+        const newSpeedOption = options[newIndex];
+        const newSpeed = parseFloat(newSpeedOption.value);
+
+        speedSelect.value = newSpeedOption.value;
+        
+        // Add smooth transition by applying speed gradually
+        this.applySpeedSmoothly(newSpeed);
+        
+        this.showSpeedNotification(newSpeed.toFixed(2));
+    }
+    
+    applySpeedSmoothly(targetSpeed) {
+        const currentSpeed = this.videoPlayer.getPlaybackRate();
+        const speedDiff = targetSpeed - currentSpeed;
+        
+        // If difference is small, apply immediately
+        if (Math.abs(speedDiff) < 0.1) {
+            this.videoPlayer.setPlaybackRate(targetSpeed);
+            return;
+        }
+        
+        // Apply speed in small steps for smooth transition
+        const steps = 3;
+        const stepSize = speedDiff / steps;
+        let currentStep = 0;
+        
+        const applyStep = () => {
+            if (currentStep < steps) {
+                const newSpeed = currentSpeed + (stepSize * (currentStep + 1));
+                this.videoPlayer.setPlaybackRate(newSpeed);
+                currentStep++;
+                setTimeout(applyStep, 50); // Small delay between steps
+            } else {
+                // Ensure final speed is exact
+                this.videoPlayer.setPlaybackRate(targetSpeed);
+            }
+        };
+        
+        applyStep();
+    }
+    
+    showSpeedNotification(speed) {
+        // Remove existing notification
+        const existingNotification = document.querySelector('.speed-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Create new notification
+        const notification = document.createElement('div');
+        notification.className = 'speed-notification';
+        notification.textContent = `${speed}x Speed`;
+        
+        // Add to video wrapper
+        const videoWrapper = document.getElementById('videoWrapper');
+        if (videoWrapper) {
+            videoWrapper.appendChild(notification);
+            
+            // Remove after 1.5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 1500);
         }
     }
     
@@ -364,6 +471,10 @@ export class ControlsHandler {
                 document.body.focus();
             });
         }
+        
+        // YouTube-style speed control variables
+        this.originalPlaybackRate = 1;
+        this.isSpeedBoostActive = false;
         
         document.addEventListener('keydown', (e) => {
             // Ignore if input/select is focused
@@ -406,18 +517,96 @@ export class ControlsHandler {
                 e.preventDefault();
                 this.adjustVolume(-0.1);
             }
-            // Spacebar: Play/Pause
+            // Spacebar: prevent native toggling; our keyup/hold logic handles behavior
             else if (e.key === ' ') {
                 e.preventDefault();
-                this.videoPlayer.togglePlayPause();
+                return;
             }
             // M key: Mute toggle
             else if (e.key === 'm' || e.key === 'M') {
                 e.preventDefault();
                 this.videoPlayer.toggleMute();
             }
+        });
+        
+        // Handle spacebar hold for speed boost (YouTube-style)
+        let spacebarHoldTimer = null;
+        let spacebarPressTime = 0;
+        let isHoldingSpacebar = false;
+        
+        document.addEventListener('keydown', (e) => {
+            // Ignore if input/select is focused
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'SELECT') {
+                return;
+            }
+            
+            // Spacebar keydown: Start timing for hold detection
+            if (e.key === ' ' && !e.repeat && !isHoldingSpacebar) {
+                e.preventDefault();
+                isHoldingSpacebar = true;
+                spacebarPressTime = Date.now();
+                console.log('Spacebar pressed - starting hold timer');
+                
+                // Start timer for speed boost (if held long enough)
+                spacebarHoldTimer = setTimeout(() => {
+                    console.log('Speed boost activated!');
+                    // Store original speed before boosting
+                    this.originalPlaybackRate = this.videoPlayer.getPlaybackRate();
+                    // Set to 2x speed
+                    this.videoPlayer.setPlaybackRate(2);
+                    this.isSpeedBoostActive = true;
+                    this.showSpeedNotification('2.00');
+                }, 150); // Reduced from 300ms to 150ms for faster activation
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            // Ignore if input/select is focused
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'SELECT') {
+                return;
+            }
+            
+            // Spacebar keyup: Handle release
+            if (e.key === ' ' && isHoldingSpacebar) {
+                e.preventDefault();
+                isHoldingSpacebar = false;
+                
+                const holdDuration = Date.now() - spacebarPressTime;
+                console.log(`Spacebar released after ${holdDuration}ms`);
+                
+                // Clear the speed boost timer
+                if (spacebarHoldTimer) {
+                    clearTimeout(spacebarHoldTimer);
+                    spacebarHoldTimer = null;
+                }
+                
+                // If speed boost was active, restore original speed
+                if (this.isSpeedBoostActive) {
+                    console.log('Restoring original speed');
+                    this.videoPlayer.setPlaybackRate(this.originalPlaybackRate);
+                    this.isSpeedBoostActive = false;
+                    this.showSpeedNotification(this.originalPlaybackRate.toFixed(2));
+                }
+                // If it was a quick tap (under 150ms), do play/pause
+                else if (holdDuration < 150) {
+                    console.log('Quick tap - toggling play/pause');
+                    this.videoPlayer.togglePlayPause();
+                }
+            }
+        });
+        
+        // Handle other keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ignore if input/select is focused
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'SELECT') {
+                return;
+            }
+            
             // T key: Always on top toggle
-            else if (e.key === 't' || e.key === 'T') {
+            if (e.key === 't' || e.key === 'T') {
                 e.preventDefault();
                 this.toggleAlwaysOnTop();
             }
@@ -425,6 +614,16 @@ export class ControlsHandler {
             else if (e.key === 'i' || e.key === 'I') {
                 e.preventDefault();
                 this.toggleVideoInfoPanel();
+            }
+            // + key: Speed up
+            else if (e.key === '+' || e.key === '=') {
+                e.preventDefault();
+                this.adjustSpeed(0.25);
+            }
+            // - key: Speed down
+            else if (e.key === '-') {
+                e.preventDefault();
+                this.adjustSpeed(-0.25);
             }
             // ? key: Keyboard help
             else if (e.key === '?') {
@@ -434,19 +633,55 @@ export class ControlsHandler {
         });
     }
     
-    toggleFullscreen() {
+    async toggleFullscreen() {
+        // Prefer fullscreen on the player container (video + controls)
+        const playerContainer = document.getElementById('playerContainer');
         const videoWrapper = document.getElementById('videoWrapper');
-        if (!videoWrapper) return;
-        
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            if (videoWrapper.requestFullscreen) {
-                videoWrapper.requestFullscreen();
-            } else if (videoWrapper.webkitRequestFullscreen) {
+
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                return;
+            }
+
+            if (playerContainer && playerContainer.requestFullscreen) {
+                await playerContainer.requestFullscreen();
+                return;
+            }
+
+            // Fallback: vendor prefixed APIs
+            if (playerContainer && playerContainer.webkitRequestFullscreen) {
+                playerContainer.webkitRequestFullscreen();
+                return;
+            }
+            if (playerContainer && playerContainer.mozRequestFullScreen) {
+                playerContainer.mozRequestFullScreen();
+                return;
+            }
+
+            // Secondary fallback: fullscreen the video wrapper
+            if (videoWrapper && videoWrapper.requestFullscreen) {
+                await videoWrapper.requestFullscreen();
+                return;
+            }
+            if (videoWrapper && videoWrapper.webkitRequestFullscreen) {
                 videoWrapper.webkitRequestFullscreen();
-            } else if (videoWrapper.mozRequestFullScreen) {
+                return;
+            }
+            if (videoWrapper && videoWrapper.mozRequestFullScreen) {
                 videoWrapper.mozRequestFullScreen();
+                return;
+            }
+
+            // Last resort: fullscreen the document element
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+                return;
+            }
+        } catch (err) {
+            // If all attempts fail and Electron exposes a window API, use it
+            if (window.electronAPI && window.electronAPI.toggleFullscreen) {
+                window.electronAPI.toggleFullscreen();
             }
         }
     }
@@ -535,34 +770,46 @@ export class ControlsHandler {
     }
     
     setupAutoHideControls() {
-        const controlsSection = document.querySelector('.controls-section');
         const videoWrapper = document.getElementById('videoWrapper');
-        
-        if (!controlsSection || !videoWrapper) return;
-        
-        // Show controls on mouse move
-        let mouseMoveTimeout = null;
-        const showControls = () => {
-            this.resetInactivityTimer();
+        if (!videoWrapper) {
+            return;
+        }
+
+        const resetInactivityTimer = () => {
+            this.showControls();
+            clearTimeout(this.inactivityTimeout);
+            this.inactivityTimeout = setTimeout(() => {
+                if (document.fullscreenElement && !this.videoPlayer.videoElement.paused) {
+                    this.hideControls();
+                }
+            }, this.inactivityDelay);
         };
+
+        // Add mousemove listener to video wrapper
+        videoWrapper.addEventListener('mousemove', resetInactivityTimer);
         
-        // Track mouse movement
-        document.addEventListener('mousemove', () => {
-            if (this.controlsHidden) {
-                this.showControls();
+        // Also add listener to the document for fullscreen mode
+        document.addEventListener('mousemove', resetInactivityTimer);
+
+        // Add click listener to show controls when video is clicked
+        videoWrapper.addEventListener('click', resetInactivityTimer);
+
+        document.addEventListener('fullscreenchange', () => {
+            // Always show controls briefly on state change
+            this.showControls();
+            clearTimeout(this.inactivityTimeout);
+
+            // In fullscreen, auto-hide like cursor without requiring movement
+            if (document.fullscreenElement && this.videoPlayer.videoElement &&
+                !this.videoPlayer.videoElement.paused && this.videoPlayer.videoElement.src) {
+                this.inactivityTimeout = setTimeout(() => {
+                    this.hideControls();
+                }, this.inactivityDelay);
             }
-            this.resetInactivityTimer();
         });
-        
-        // Track any user interaction
-        controlsSection.addEventListener('mouseenter', () => {
-            this.resetInactivityTimer();
-        });
-        
-        // Don't hide controls if mouse is over controls
-        controlsSection.addEventListener('mouseleave', () => {
-            this.resetInactivityTimer();
-        });
+
+        // Always show controls initially
+        this.showControls();
     }
     
     resetInactivityTimer() {
@@ -588,9 +835,15 @@ export class ControlsHandler {
     
     hideControls() {
         const controlsSection = document.querySelector('.controls-section');
-        if (controlsSection && !controlsSection.matches(':hover')) {
-            controlsSection.classList.add('hidden');
-            this.controlsHidden = true;
+        if (controlsSection) {
+            // In fullscreen, skip hover check to avoid stuck controls
+            if (document.fullscreenElement) {
+                controlsSection.classList.add('hidden');
+                this.controlsHidden = true;
+            } else if (!controlsSection.matches(':hover')) {
+                controlsSection.classList.add('hidden');
+                this.controlsHidden = true;
+            }
         }
     }
     
@@ -840,6 +1093,8 @@ export class ControlsHandler {
                 { key: 'Right Arrow', description: 'Seek Forward 5s' },
                 { key: 'Up Arrow', description: 'Increase Volume' },
                 { key: 'Down Arrow', description: 'Decrease Volume' },
+                { key: '+ / =', description: 'Speed Up (+0.25x)' },
+                { key: '-', description: 'Speed Down (-0.25x)' },
                 { key: 'M', description: 'Mute/Unmute' },
                 { key: 'F', description: 'Toggle Fullscreen' },
                 { key: 'F11', description: 'Toggle Fullscreen (Alt)' },

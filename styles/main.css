@@ -43,14 +43,14 @@ body {
 .header {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
-    padding: 12px 20px;
+    padding: 8px 16px;
     padding-left: 80px; /* Space for macOS window controls (left side) */
     padding-right: 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-    min-height: 50px;
+    min-height: 44px;
 }
 
 /* Adjust padding for Windows/Linux (window controls on right) */
@@ -87,9 +87,9 @@ body:not(.platform-darwin) .header {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-secondary);
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
     cursor: pointer;
     transition: all 0.2s;
     display: inline-flex;
@@ -252,6 +252,28 @@ body:not(.platform-darwin) .header {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* Speed Notification */
+.speed-notification {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    z-index: 1000;
+    animation: speedNotification 0.3s ease-out;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes speedNotification {
+    0% { transform: translateX(100%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+
 /* Volume Indicator */
 .volume-indicator {
     position: absolute;
@@ -297,12 +319,29 @@ body:not(.platform-darwin) .header {
     text-align: center;
 }
 
-/* Controls Section - Fixed at bottom */
+/* Player container fills available space and reserves bottom padding for controls */
+.player-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    /* Reserve space roughly equal to controls height */
+    padding-bottom: 100px;
+}
+
+/* Controls Section - Fixed at bottom of window */
 .controls-section {
-    background: var(--bg-secondary);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
     border-top: 1px solid var(--border);
-    padding: 16px 20px;
-    flex-shrink: 0;
+    backdrop-filter: blur(6px);
+    padding: 12px 16px;
+    z-index: 1000;
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -312,12 +351,23 @@ body:not(.platform-darwin) .header {
     pointer-events: none;
 }
 
+/* During drag-over, ensure controls don't intercept drop */
+.player-container.drag-over .controls-section {
+    pointer-events: none;
+}
+
+/* When dragging over the player, show the same visual cue on the video wrapper */
+.player-container.drag-over .video-wrapper {
+    border: 3px dashed var(--accent-primary);
+    background: rgba(59, 130, 246, 0.1);
+}
+
 /* Seek Bar */
 .seek-container {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 12px;
 }
 
 .seek-bar-wrapper {
@@ -483,7 +533,7 @@ body:not(.platform-darwin) .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
 }
 
 .controls-left {
@@ -504,8 +554,8 @@ body:not(.platform-darwin) .header {
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
-    padding: 8px;
-    border-radius: 6px;
+    padding: 6px;
+    border-radius: 4px;
     transition: all 0.2s;
     display: flex;
     align-items: center;
@@ -522,8 +572,8 @@ body:not(.platform-darwin) .header {
 }
 
 .play-pause-btn {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
     background: var(--accent-primary);
     color: white;
     border-radius: 50%;
@@ -535,22 +585,22 @@ body:not(.platform-darwin) .header {
 }
 
 .control-btn i {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 .play-pause-btn i {
-    font-size: 18px;
+    font-size: 16px;
 }
 
 /* Volume Control */
 .volume-control {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 #volumeSlider {
-    width: 80px;
+    width: 60px;
     height: 4px;
     -webkit-appearance: none;
     appearance: none;
@@ -580,19 +630,25 @@ body:not(.platform-darwin) .header {
 }
 
 /* Speed Control */
+.speed-control {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
 .speed-select {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-primary);
-    padding: 6px 24px 6px 10px;
-    border-radius: 6px;
-    font-size: 13px;
+    padding: 4px 20px 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
     cursor: pointer;
     outline: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0a0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0a0a0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 8px center;
+    background-position: right 6px center;
 }
 
 .speed-select:hover {
@@ -605,15 +661,26 @@ body:not(.platform-darwin) .header {
     outline-offset: 2px;
 }
 
+.speed-btn {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 10px;
+}
+
+.speed-btn i {
+    font-size: 10px;
+}
+
 /* Subtitle Controls */
 .subtitle-controls {
-    margin-top: 16px;
-    padding-top: 16px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
 }
 
 .subtitle-controls-label {
@@ -625,13 +692,13 @@ body:not(.platform-darwin) .header {
 .subtitle-options {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 }
 
 .subtitle-option {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 .subtitle-option label {
@@ -643,10 +710,10 @@ body:not(.platform-darwin) .header {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-primary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    width: 60px;
-    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    width: 50px;
+    font-size: 11px;
     text-align: center;
 }
 
@@ -657,10 +724,10 @@ body:not(.platform-darwin) .header {
 }
 
 #colorInput {
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 3px;
     cursor: pointer;
     background: none;
     padding: 0;
@@ -685,6 +752,48 @@ body:not(.platform-darwin) .header {
     align-items: center;
     justify-content: center;
     background: #000;
+}
+
+/* If the player container is the fullscreen element */
+.player-container:fullscreen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    padding-bottom: 0; /* no reserve space in fullscreen */
+}
+
+/* Fullscreen Controls - Position at bottom with overlay effect */
+:fullscreen .controls-section,
+:-webkit-full-screen .controls-section,
+:-moz-full-screen .controls-section {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    padding: 20px;
+}
+
+/* Ensure controls are visible in fullscreen when not hidden */
+:fullscreen .controls-section:not(.hidden),
+:-webkit-full-screen .controls-section:not(.hidden),
+:-moz-full-screen .controls-section:not(.hidden) {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Ensure controls are hidden in fullscreen when hidden class is applied */
+:fullscreen .controls-section.hidden,
+:-webkit-full-screen .controls-section.hidden,
+:-moz-full-screen .controls-section.hidden {
+    opacity: 0;
+    transform: translateY(100%);
+    pointer-events: none;
 }
 
 /* Video Info Panel */

@@ -5,6 +5,7 @@
 
 export class VideoPlayer {
     constructor() {
+        console.log('VideoPlayer constructor starting...');
         this.videoElement = document.getElementById('mediaPlayer');
         this.videoFileInput = document.getElementById('videoFile');
         this.subtitleFileInput = document.getElementById('subtitleFile');
@@ -12,12 +13,24 @@ export class VideoPlayer {
         this.loadingIndicator = document.getElementById('loadingIndicator');
         this.headerTitle = document.getElementById('headerTitle');
 
+        // New: Reference to the main video container for fullscreen and cursor control
+        this.videoWrapper = document.getElementById('videoWrapper');
+        // New: Timer for hiding the cursor after inactivity
+        this.cursorTimeout = null;
+
         this.subTitleFontSize = 1.8;
         this.subTitleColor = '#FFFFFF';
         this.lastVolume = 1.0;
         this.currentVideoFile = null;
         this.currentVideoPath = null;
         this.lastSavedSecond = null;
+
+        console.log('VideoPlayer elements found:', {
+            videoElement: this.videoElement,
+            videoWrapper: this.videoWrapper,
+            messageOverlay: this.messageOverlay,
+            loadingIndicator: this.loadingIndicator
+        });
 
         this.init();
     }
@@ -31,6 +44,9 @@ export class VideoPlayer {
         this.setupEventListeners();
         this.updateSubtitleStyles();
         this.showMessage("Ready. Select a video file to start.");
+
+        // Fix: Explicitly set the video element cursor to 'default' on init
+        this.videoElement.style.cursor = 'default';
     }
 
     setupEventListeners() {
@@ -85,6 +101,25 @@ export class VideoPlayer {
 
         // Load saved playback position
         this.loadPlaybackPosition();
+
+        // --- START: Cursor Control (Updated) ---
+
+        if (this.videoWrapper) {
+            // Handles showing cursor and setting hide timer on movement in all modes (fullscreen/default)
+            this.videoWrapper.addEventListener('mousemove', () => this.handleMouseMove());
+
+            // NEW: Crucial for hiding cursor in non-fullscreen mode
+            // Resets cursor to visible and clears the timer when the mouse leaves the video wrapper.
+            this.videoWrapper.addEventListener('mouseleave', () => this.handleMouseLeave());
+        }
+
+        // Listen for fullscreen change events (cross-browser compatibility)
+        document.addEventListener('fullscreenchange', () => this.handleFullscreenChange());
+        document.addEventListener('webkitfullscreenchange', () => this.handleFullscreenChange());
+        document.addEventListener('mozfullscreenchange', () => this.handleFullscreenChange());
+        document.addEventListener('msfullscreenchange', () => this.handleFullscreenChange());
+
+        // --- END: Cursor Control ---
     }
 
     handleVideoFile(event) {
@@ -350,6 +385,10 @@ export class VideoPlayer {
         }
     }
 
+    getPlaybackRate() {
+        return this.videoElement ? this.videoElement.playbackRate : 1;
+    }
+
     updateVolumeIcon(volume) {
         const volumeIcon = document.getElementById('volumeIcon');
         if (!volumeIcon) return;
@@ -439,64 +478,102 @@ export class VideoPlayer {
         }
     }
 
-    toggleFullscreen() {
-        const videoWrapper = document.getElementById('videoWrapper');
-        if (!videoWrapper) return;
+    async toggleFullscreen() {
+        // Prefer fullscreen on the player container (includes controls),
+        // fallback to video wrapper if needed
+        const playerContainer = document.getElementById('playerContainer');
+        const videoWrapper = this.videoWrapper;
 
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            if (videoWrapper.requestFullscreen) {
-                videoWrapper.requestFullscreen();
-            } else if (videoWrapper.webkitRequestFullscreen) {
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                return;
+            }
+
+            if (playerContainer && playerContainer.requestFullscreen) {
+                await playerContainer.requestFullscreen();
+                return;
+            }
+            if (playerContainer && playerContainer.webkitRequestFullscreen) {
+                playerContainer.webkitRequestFullscreen();
+                return;
+            }
+            if (playerContainer && playerContainer.mozRequestFullScreen) {
+                playerContainer.mozRequestFullScreen();
+                return;
+            }
+
+            if (videoWrapper && videoWrapper.requestFullscreen) {
+                await videoWrapper.requestFullscreen();
+                return;
+            }
+            if (videoWrapper && videoWrapper.webkitRequestFullscreen) {
                 videoWrapper.webkitRequestFullscreen();
-            } else if (videoWrapper.mozRequestFullScreen) {
+                return;
+            }
+            if (videoWrapper && videoWrapper.mozRequestFullScreen) {
                 videoWrapper.mozRequestFullScreen();
+                return;
+            }
+
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+        } catch (err) {
+            // As a last resort, try IPC if exposed
+            if (window.electronAPI && window.electronAPI.toggleFullscreen) {
+                window.electronAPI.toggleFullscreen();
             }
         }
     }
 
     setupDragAndDrop() {
-        const videoWrapper = document.getElementById('videoWrapper');
-        if (!videoWrapper) return;
+        const playerContainer = document.getElementById('playerContainer');
+        const dropTargets = [playerContainer, this.videoWrapper].filter(Boolean);
+        if (dropTargets.length === 0) return;
 
-        // Prevent default drag behaviors
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            videoWrapper.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }, false);
-        });
+        const addDnDListeners = (el) => {
+            // Prevent default drag behaviors (capture to beat overlays)
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                el.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, { capture: true });
+            });
 
-        // Highlight drop zone
-        ['dragenter', 'dragover'].forEach(eventName => {
-            videoWrapper.addEventListener(eventName, () => {
-                videoWrapper.classList.add('drag-over');
-            }, false);
-        });
+            // Highlight drop zone and temporarily disable controls pointer events
+            ['dragenter', 'dragover'].forEach(eventName => {
+                el.addEventListener(eventName, () => {
+                    el.classList.add('drag-over');
+                }, { capture: true });
+            });
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            videoWrapper.addEventListener(eventName, () => {
-                videoWrapper.classList.remove('drag-over');
-            }, false);
-        });
+            ['dragleave', 'drop'].forEach(eventName => {
+                el.addEventListener(eventName, () => {
+                    el.classList.remove('drag-over');
+                }, { capture: true });
+            });
 
-        // Handle dropped files
-        videoWrapper.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                const file = files[0];
-                // Check if it's a video file
-                if (file.type.startsWith('video/') ||
-                    file.name.match(/\.(mp4|mkv|webm|avi|mov|m4v)$/i)) {
-                    this.loadVideoFile(file);
-                } else if (file.name.match(/\.(srt|vtt)$/i)) {
-                    // Handle subtitle file
-                    const fakeEvent = { target: { files: [file] } };
-                    this.handleSubtitleFile(fakeEvent);
+            // Handle dropped files
+            el.addEventListener('drop', (e) => {
+                const files = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : [];
+                if (files.length > 0) {
+                    const file = files[0];
+                    // Video file
+                    if (file.type.startsWith('video/') || file.name.match(/\.(mp4|mkv|webm|avi|mov|m4v)$/i)) {
+                        this.loadVideoFile(file);
+                    }
+                    // Subtitle file
+                    else if (file.name.match(/\.(srt|vtt)$/i)) {
+                        const fakeEvent = { target: { files: [file] } };
+                        this.handleSubtitleFile(fakeEvent);
+                    }
                 }
-            }
-        }, false);
+            }, { capture: true });
+        };
+
+        // Attach to all relevant targets
+        dropTargets.forEach(addDnDListeners);
     }
 
     savePlaybackPosition() {
@@ -641,5 +718,78 @@ export class VideoPlayer {
             muted: this.videoElement.muted
         };
     }
-}
 
+    // --- CURSOR CONTROL METHODS ---
+
+    /**
+     * Toggles cursor visibility logic based on fullscreen status.
+     * Called by cross-browser fullscreen change events.
+     */
+    handleFullscreenChange() {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        // Ensure both elements exist before proceeding
+        if (!this.videoWrapper || !this.videoElement) return;
+
+        if (isFullscreen) {
+            // When entering fullscreen, ensure cursor is default on both elements and start timer
+            this.videoWrapper.style.cursor = 'default';
+            this.videoElement.style.cursor = 'default';
+            this.handleMouseMove();
+        } else {
+            // When exiting fullscreen, ensure cursor is visible and stop the timer.
+            if (this.cursorTimeout) {
+                clearTimeout(this.cursorTimeout);
+                this.cursorTimeout = null;
+            }
+            // Reset both cursors to 'default' (visible)
+            this.videoWrapper.style.cursor = 'default';
+            this.videoElement.style.cursor = 'default';
+        }
+    }
+
+    /**
+     * Shows the cursor and resets the 3-second timer to hide it.
+     * This runs whenever the mouse moves over the video wrapper (in any mode).
+     */
+    handleMouseMove() {
+        if (!this.videoWrapper || !this.videoElement) return;
+
+        // 1. Show the cursor immediately upon movement
+        this.videoWrapper.style.cursor = 'default';
+        this.videoElement.style.cursor = 'default';
+
+        // 2. Clear any existing hide timer
+        if (this.cursorTimeout) {
+            clearTimeout(this.cursorTimeout);
+        }
+
+        // 3. Set a new timer to hide the cursor after 3 seconds of inactivity
+        this.cursorTimeout = setTimeout(() => {
+            // Hide cursor on both elements
+            this.videoWrapper.style.cursor = 'none';
+            this.videoElement.style.cursor = 'none';
+        }, 3000);
+    }
+
+    /**
+     * NEW: Ensures cursor is visible when the mouse leaves the video area
+     * in non-fullscreen mode, and cancels the timer.
+     */
+    handleMouseLeave() {
+        const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        // ONLY perform this action if NOT in fullscreen
+        if (!isFullscreen && this.videoWrapper && this.videoElement) {
+            // 1. Ensure cursor is visible when leaving the video area
+            this.videoWrapper.style.cursor = 'default';
+            this.videoElement.style.cursor = 'default';
+
+            // 2. Clear the hide timer
+            if (this.cursorTimeout) {
+                clearTimeout(this.cursorTimeout);
+                this.cursorTimeout = null;
+            }
+        }
+    }
+}

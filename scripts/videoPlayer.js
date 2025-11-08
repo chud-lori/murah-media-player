@@ -5,6 +5,7 @@
 
 export class VideoPlayer {
     constructor() {
+        console.log('VideoPlayer constructor starting...');
         this.videoElement = document.getElementById('mediaPlayer');
         this.videoFileInput = document.getElementById('videoFile');
         this.subtitleFileInput = document.getElementById('subtitleFile');
@@ -23,6 +24,13 @@ export class VideoPlayer {
         this.currentVideoFile = null;
         this.currentVideoPath = null;
         this.lastSavedSecond = null;
+
+        console.log('VideoPlayer elements found:', {
+            videoElement: this.videoElement,
+            videoWrapper: this.videoWrapper,
+            messageOverlay: this.messageOverlay,
+            loadingIndicator: this.loadingIndicator
+        });
 
         this.init();
     }
@@ -377,6 +385,10 @@ export class VideoPlayer {
         }
     }
 
+    getPlaybackRate() {
+        return this.videoElement ? this.videoElement.playbackRate : 1;
+    }
+
     updateVolumeIcon(volume) {
         const volumeIcon = document.getElementById('volumeIcon');
         if (!volumeIcon) return;
@@ -466,64 +478,102 @@ export class VideoPlayer {
         }
     }
 
-    toggleFullscreen() {
-        // We use this.videoWrapper which is initialized in the constructor
-        if (!this.videoWrapper) return;
+    async toggleFullscreen() {
+        // Prefer fullscreen on the player container (includes controls),
+        // fallback to video wrapper if needed
+        const playerContainer = document.getElementById('playerContainer');
+        const videoWrapper = this.videoWrapper;
 
-        if (document.fullscreenElement) {
-            document.exitFullscreen();
-        } else {
-            if (this.videoWrapper.requestFullscreen) {
-                this.videoWrapper.requestFullscreen();
-            } else if (this.videoWrapper.webkitRequestFullscreen) {
-                this.videoWrapper.webkitRequestFullscreen();
-            } else if (this.videoWrapper.mozRequestFullScreen) {
-                this.videoWrapper.mozRequestFullScreen();
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                return;
+            }
+
+            if (playerContainer && playerContainer.requestFullscreen) {
+                await playerContainer.requestFullscreen();
+                return;
+            }
+            if (playerContainer && playerContainer.webkitRequestFullscreen) {
+                playerContainer.webkitRequestFullscreen();
+                return;
+            }
+            if (playerContainer && playerContainer.mozRequestFullScreen) {
+                playerContainer.mozRequestFullScreen();
+                return;
+            }
+
+            if (videoWrapper && videoWrapper.requestFullscreen) {
+                await videoWrapper.requestFullscreen();
+                return;
+            }
+            if (videoWrapper && videoWrapper.webkitRequestFullscreen) {
+                videoWrapper.webkitRequestFullscreen();
+                return;
+            }
+            if (videoWrapper && videoWrapper.mozRequestFullScreen) {
+                videoWrapper.mozRequestFullScreen();
+                return;
+            }
+
+            if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+        } catch (err) {
+            // As a last resort, try IPC if exposed
+            if (window.electronAPI && window.electronAPI.toggleFullscreen) {
+                window.electronAPI.toggleFullscreen();
             }
         }
     }
 
     setupDragAndDrop() {
-        // Uses this.videoWrapper which is initialized in the constructor
-        if (!this.videoWrapper) return;
+        const playerContainer = document.getElementById('playerContainer');
+        const dropTargets = [playerContainer, this.videoWrapper].filter(Boolean);
+        if (dropTargets.length === 0) return;
 
-        // Prevent default drag behaviors
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            this.videoWrapper.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }, false);
-        });
+        const addDnDListeners = (el) => {
+            // Prevent default drag behaviors (capture to beat overlays)
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                el.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, { capture: true });
+            });
 
-        // Highlight drop zone
-        ['dragenter', 'dragover'].forEach(eventName => {
-            this.videoWrapper.addEventListener(eventName, () => {
-                this.videoWrapper.classList.add('drag-over');
-            }, false);
-        });
+            // Highlight drop zone and temporarily disable controls pointer events
+            ['dragenter', 'dragover'].forEach(eventName => {
+                el.addEventListener(eventName, () => {
+                    el.classList.add('drag-over');
+                }, { capture: true });
+            });
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            this.videoWrapper.addEventListener(eventName, () => {
-                this.videoWrapper.classList.remove('drag-over');
-            }, false);
-        });
+            ['dragleave', 'drop'].forEach(eventName => {
+                el.addEventListener(eventName, () => {
+                    el.classList.remove('drag-over');
+                }, { capture: true });
+            });
 
-        // Handle dropped files
-        this.videoWrapper.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                const file = files[0];
-                // Check if it's a video file
-                if (file.type.startsWith('video/') ||
-                    file.name.match(/\.(mp4|mkv|webm|avi|mov|m4v)$/i)) {
-                    this.loadVideoFile(file);
-                } else if (file.name.match(/\.(srt|vtt)$/i)) {
-                    // Handle subtitle file
-                    const fakeEvent = { target: { files: [file] } };
-                    this.handleSubtitleFile(fakeEvent);
+            // Handle dropped files
+            el.addEventListener('drop', (e) => {
+                const files = e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : [];
+                if (files.length > 0) {
+                    const file = files[0];
+                    // Video file
+                    if (file.type.startsWith('video/') || file.name.match(/\.(mp4|mkv|webm|avi|mov|m4v)$/i)) {
+                        this.loadVideoFile(file);
+                    }
+                    // Subtitle file
+                    else if (file.name.match(/\.(srt|vtt)$/i)) {
+                        const fakeEvent = { target: { files: [file] } };
+                        this.handleSubtitleFile(fakeEvent);
+                    }
                 }
-            }
-        }, false);
+            }, { capture: true });
+        };
+
+        // Attach to all relevant targets
+        dropTargets.forEach(addDnDListeners);
     }
 
     savePlaybackPosition() {

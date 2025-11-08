@@ -37,6 +37,8 @@
             </div>
         </header>
 
+        <!-- Player Container: video + controllers (fullscreen target) -->
+        <div id="playerContainer" class="player-container">
         <!-- Video Section -->
         <section class="video-section">
             <div id="videoWrapper" class="video-wrapper">
@@ -91,7 +93,7 @@
                         <i class="fas fa-forward"></i>
                     </button>
                 </div>
-                
+
                 <div class="controls-right">
                     <div class="volume-control">
                         <button id="muteToggleBtn" class="control-btn" title="Mute (M)">
@@ -99,7 +101,7 @@
                     </button>
                         <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="1" title="Volume" />
                     </div>
-                    
+
                     <select id="speedSelect" class="speed-select" title="Playback Speed">
                             <option value="0.5">0.5x</option>
                             <option value="0.75">0.75x</option>
@@ -108,7 +110,7 @@
                             <option value="1.5">1.5x</option>
                             <option value="2.0">2.0x</option>
                         </select>
-                    
+
                     <button id="fullscreenToggleBtn" class="control-btn" title="Fullscreen (F)">
                         <i id="fullscreenIcon" class="fas fa-expand"></i>
                     </button>
@@ -158,16 +160,17 @@
                 </div>
             </div>
         </div>
+        </div><!-- end #playerContainer -->
     </div>
 
     <script type="module" src="scripts/main.js"></script>
     <script>
         // Add platform class to body for CSS targeting
-        if (navigator.platform.toLowerCase().includes('mac') || 
+        if (navigator.platform.toLowerCase().includes('mac') ||
             navigator.userAgent.toLowerCase().includes('mac')) {
             document.body.classList.add('platform-darwin');
         }
-        
+
         // File input button triggers
         document.getElementById('videoFileBtn').addEventListener('click', () => {
             document.getElementById('videoFile').click();

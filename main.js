@@ -33,7 +33,7 @@ function createWindow() {
         mainWindow.setTitle('Murah Media Player');
     });
 
-    // Open DevTools in development (comment out for production)
+    // DevTools disabled for production
     // mainWindow.webContents.openDevTools();
 
     mainWindow.on('closed', () => {

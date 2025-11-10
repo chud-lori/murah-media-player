@@ -14,11 +14,7 @@ I was initiate this (vibe-coded) because when I try to play MKV in mac os with s
 - 🖥️ **Fullscreen Mode** - Immersive fullscreen playback
 - ⌨️ **Keyboard Shortcuts** - Full keyboard control for all features
 - 🎨 **Modern UI** - Clean, desktop-native interface with dark theme
-- 🎯 **No Scrolling** - Fixed layout optimized for desktop use
-
-## Screenshots
-
-*Add screenshots of your app here*
+- ℹ️ **Show Video Info Panel** - Showing information about the video and its metadata
 
 ## Prerequisites
 
@@ -29,7 +25,7 @@ I was initiate this (vibe-coded) because when I try to play MKV in mac os with s
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/web-based-video-player.git
+git clone https://github.com/chud-lori/murah-media-player
 cd web-based-video-player
 ```
 

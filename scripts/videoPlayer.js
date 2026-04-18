@@ -251,10 +251,11 @@ export class VideoPlayer {
     }
 
     onMetadataLoaded() {
-        this.videoElement.volume = 1.0;
+        const savedVolume = parseFloat(localStorage.getItem('playerVolume') ?? '1.0');
+        this.videoElement.volume = savedVolume;
         const volumeSlider = document.getElementById('volumeSlider');
-        if (volumeSlider) volumeSlider.value = 1.0;
-        this.updateVolumeIcon(1.0);
+        if (volumeSlider) volumeSlider.value = savedVolume;
+        this.updateVolumeIcon(savedVolume);
 
         const seekBar = document.getElementById('seekBar');
         const durationDisplay = document.getElementById('duration');
@@ -353,6 +354,7 @@ export class VideoPlayer {
     setVolume(volume) {
         this.videoElement.volume = volume;
         this.updateVolumeIcon(volume);
+        localStorage.setItem('playerVolume', volume.toString());
 
         if (volume > 0) {
             this.videoElement.muted = false;
@@ -717,6 +719,77 @@ export class VideoPlayer {
             volume: this.videoElement.volume,
             muted: this.videoElement.muted
         };
+    }
+
+    // Load a video from a native file path (used by Electron menu actions)
+    loadVideoFromPath(filePath, fileSize) {
+        const fileName = filePath.replace(/\\/g, '/').split('/').pop() || filePath;
+        const fileUrl = filePath.startsWith('file://') ? filePath
+            : (filePath.startsWith('/') ? 'file://' + filePath : 'file:///' + filePath.replace(/\\/g, '/'));
+
+        if (this.videoElement.src) {
+            URL.revokeObjectURL(this.videoElement.src);
+        }
+
+        this.currentVideoFile = { name: fileName, size: fileSize || 0, type: '' };
+        this.currentVideoPath = fileName;
+        this.lastSavedSecond = null;
+
+        this.videoElement.src = fileUrl;
+        this.videoElement.load();
+
+        const previewVideo = document.getElementById('previewVideo');
+        if (previewVideo) {
+            previewVideo.src = fileUrl;
+            previewVideo.load();
+            previewVideo.pause();
+        }
+
+        this.hideMessage();
+        this.showMessage("Video loaded. Press Play.");
+
+        this.videoElement.playbackRate = 1.0;
+        const speedSelect = document.getElementById('speedSelect');
+        if (speedSelect) speedSelect.value = '1.0';
+
+        const videoBtn = document.getElementById('videoFileBtn');
+        if (videoBtn) {
+            videoBtn.classList.add('has-file');
+            videoBtn.innerHTML = `<i class="fas fa-check"></i> ${fileName}`;
+        }
+
+        this.updateHeaderTitle(fileName);
+    }
+
+    // Load subtitle content directly (used by Electron menu actions)
+    loadSubtitleFromContent(content, fileName) {
+        const vttContent = this.srtToVtt(content);
+        const vttBlob = new Blob([vttContent], { type: 'text/vtt' });
+        const vttUrl = URL.createObjectURL(vttBlob);
+
+        const existingTracks = this.videoElement.querySelectorAll('track');
+        existingTracks.forEach(track => track.remove());
+
+        const track = document.createElement('track');
+        track.kind = 'subtitles';
+        track.label = 'English';
+        track.srclang = 'en';
+        track.src = vttUrl;
+        track.default = true;
+
+        this.videoElement.appendChild(track);
+
+        const subtitleBtn = document.getElementById('subtitleFileBtn');
+        if (subtitleBtn) {
+            subtitleBtn.classList.add('has-file');
+            subtitleBtn.innerHTML = `<i class="fas fa-check"></i> ${fileName}`;
+        }
+
+        if (this.videoElement.src) {
+            this.showMessage("Subtitles loaded.");
+        } else {
+            this.showMessage("Subtitles loaded. Now load a video file.");
+        }
     }
 
     // --- CURSOR CONTROL METHODS ---

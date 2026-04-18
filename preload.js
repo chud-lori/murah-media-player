@@ -18,4 +18,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
     isAlwaysOnTop: () => ipcRenderer.invoke('is-always-on-top'),
     sendMessage: (message) => ipcRenderer.send(message),
+    getFileStat: (filePath) => ipcRenderer.invoke('get-file-stat', filePath),
+    readSubtitleFile: (filePath) => ipcRenderer.invoke('read-subtitle-file', filePath),
 });

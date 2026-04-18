@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs').promises;
 
 // Set app name VERY EARLY (before app is ready) - affects macOS menu bar
 // This must be called before app.whenReady() or any window creation
@@ -62,6 +63,24 @@ function setupIpcHandlers() {
         if (mainWindow) {
             const isAlwaysOnTop = mainWindow.isAlwaysOnTop();
             mainWindow.setAlwaysOnTop(!isAlwaysOnTop);
+        }
+    });
+
+    ipcMain.handle('get-file-stat', async (event, filePath) => {
+        try {
+            const stat = await fs.stat(filePath);
+            return { size: stat.size, name: path.basename(filePath) };
+        } catch (e) {
+            return null;
+        }
+    });
+
+    ipcMain.handle('read-subtitle-file', async (event, filePath) => {
+        try {
+            const content = await fs.readFile(filePath, 'utf8');
+            return content;
+        } catch (e) {
+            return null;
         }
     });
 }

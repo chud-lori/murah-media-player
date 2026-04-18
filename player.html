@@ -108,6 +108,7 @@
                             <option value="1.0" selected>1.0x</option>
                             <option value="1.25">1.25x</option>
                             <option value="1.5">1.5x</option>
+                            <option value="1.75">1.75x</option>
                             <option value="2.0">2.0x</option>
                         </select>
 
@@ -182,15 +183,19 @@
 
         // Handle Electron menu actions if available
         if (window.electronAPI) {
-            window.electronAPI.onFileSelected((filePath) => {
-                // Handle file selection from menu
-                // Note: In Electron, we'd need to use fs to read the file
-                // For now, this is a placeholder
-                console.log('File selected from menu:', filePath);
+            window.electronAPI.onFileSelected(async (filePath) => {
+                const fileInfo = await window.electronAPI.getFileStat(filePath);
+                if (window.videoPlayer) {
+                    window.videoPlayer.loadVideoFromPath(filePath, fileInfo ? fileInfo.size : 0);
+                }
             });
 
-            window.electronAPI.onSubtitleSelected((filePath) => {
-                console.log('Subtitle selected from menu:', filePath);
+            window.electronAPI.onSubtitleSelected(async (filePath) => {
+                const content = await window.electronAPI.readSubtitleFile(filePath);
+                if (content && window.videoPlayer) {
+                    const fileName = filePath.replace(/\\/g, '/').split('/').pop() || filePath;
+                    window.videoPlayer.loadSubtitleFromContent(content, fileName);
+                }
             });
 
             window.electronAPI.onPlaybackToggle(() => {
@@ -204,12 +209,18 @@
                 }
             });
 
+            window.electronAPI.onSpeedIncrease(() => {
+                if (window.controlsHandler) window.controlsHandler.adjustSpeed(0.25);
+            });
+
+            window.electronAPI.onSpeedDecrease(() => {
+                if (window.controlsHandler) window.controlsHandler.adjustSpeed(-0.25);
+            });
+
             window.electronAPI.onToggleVideoInfo(() => {
-                // Trigger video info panel toggle
                 if (window.controlsHandler) {
                     window.controlsHandler.toggleVideoInfoPanel();
                 } else {
-                    // Fallback: find the button and click it
                     const videoInfoBtn = document.getElementById('videoInfoBtn');
                     if (videoInfoBtn) videoInfoBtn.click();
                 }

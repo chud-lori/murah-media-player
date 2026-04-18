@@ -24,6 +24,9 @@ export class ControlsHandler {
         this.setupAlwaysOnTop();
         this.setupVideoInfoPanel();
         this.setupKeyboardHelp();
+        this.setupLoopMode();
+        this.setupSubtitleToggle();
+        this.setupRecentFiles();
         console.log('ControlsHandler init completed');
     }
     
@@ -100,6 +103,11 @@ export class ControlsHandler {
         seekBar.addEventListener('input', () => {
             if (currentTimeDisplay) {
                 currentTimeDisplay.textContent = this.videoPlayer.formatTime(seekBar.value);
+            }
+            // Update fill while dragging
+            if (seekBar.max > 0) {
+                const progress = (seekBar.value / seekBar.max) * 100;
+                seekBar.style.setProperty('--seek-progress', `${progress}%`);
             }
         });
         
@@ -437,7 +445,8 @@ export class ControlsHandler {
     setupSubtitleControls() {
         const fontSizeInput = document.getElementById('fontSizeInput');
         const colorInput = document.getElementById('colorInput');
-        
+        const subtitleFile = document.getElementById('subtitleFile');
+
         if (fontSizeInput) {
             fontSizeInput.addEventListener('input', (e) => {
                 let val = parseFloat(e.target.value);
@@ -447,10 +456,17 @@ export class ControlsHandler {
                 this.videoPlayer.setSubtitleFontSize(val);
             });
         }
-        
+
         if (colorInput) {
             colorInput.addEventListener('input', (e) => {
                 this.videoPlayer.setSubtitleColor(e.target.value);
+            });
+        }
+
+        // Auto-expand subtitle section when a subtitle file is picked
+        if (subtitleFile) {
+            subtitleFile.addEventListener('change', () => {
+                if (subtitleFile.files.length > 0) this.showSubtitleSection();
             });
         }
     }
@@ -483,8 +499,8 @@ export class ControlsHandler {
                 return;
             }
             
-            // F key: Fullscreen toggle (works even without video)
-            if (e.key === 'f' || e.key === 'F') {
+            // F / F11: Fullscreen toggle (works even without video)
+            if (e.key === 'f' || e.key === 'F' || e.key === 'F11') {
                 e.preventDefault();
                 this.toggleFullscreen();
                 return;
@@ -605,6 +621,18 @@ export class ControlsHandler {
                 return;
             }
             
+            // L key: Loop toggle
+            if (e.key === 'l' || e.key === 'L') {
+                e.preventDefault();
+                this.toggleLoop();
+                return;
+            }
+            // S key: Subtitle controls toggle
+            if (e.key === 's' || e.key === 'S') {
+                e.preventDefault();
+                this.toggleSubtitleSection();
+                return;
+            }
             // T key: Always on top toggle
             if (e.key === 't' || e.key === 'T') {
                 e.preventDefault();
@@ -1096,8 +1124,9 @@ export class ControlsHandler {
                 { key: '+ / =', description: 'Speed Up (+0.25x)' },
                 { key: '-', description: 'Speed Down (-0.25x)' },
                 { key: 'M', description: 'Mute/Unmute' },
-                { key: 'F', description: 'Toggle Fullscreen' },
-                { key: 'F11', description: 'Toggle Fullscreen (Alt)' },
+                { key: 'L', description: 'Toggle Loop' },
+                { key: 'S', description: 'Toggle Subtitle Settings' },
+                { key: 'F / F11', description: 'Toggle Fullscreen' },
                 { key: 'T', description: 'Toggle Always on Top' },
                 { key: 'I', description: 'Show Video Info' },
                 { key: '?', description: 'Show Keyboard Shortcuts' },
@@ -1117,12 +1146,123 @@ export class ControlsHandler {
     toggleKeyboardHelp() {
         const keyboardHelpOverlay = document.getElementById('keyboardHelpOverlay');
         if (!keyboardHelpOverlay) return;
-        
+
         if (keyboardHelpOverlay.classList.contains('hidden')) {
             keyboardHelpOverlay.classList.remove('hidden');
         } else {
             keyboardHelpOverlay.classList.add('hidden');
         }
+    }
+
+    // --- LOOP MODE ---
+
+    setupLoopMode() {
+        const loopBtn = document.getElementById('loopBtn');
+        if (!loopBtn) return;
+
+        // Restore saved loop preference
+        const savedLoop = localStorage.getItem('playerLoop') === 'true';
+        if (savedLoop) {
+            this.videoPlayer.videoElement.loop = true;
+            loopBtn.classList.add('btn-active');
+        }
+
+        loopBtn.addEventListener('click', () => this.toggleLoop());
+    }
+
+    toggleLoop() {
+        const loopBtn = document.getElementById('loopBtn');
+        const video = this.videoPlayer.videoElement;
+        video.loop = !video.loop;
+        localStorage.setItem('playerLoop', video.loop);
+        if (loopBtn) loopBtn.classList.toggle('btn-active', video.loop);
+        this.showSpeedNotification(video.loop ? 'Loop On' : 'Loop Off');
+    }
+
+    // --- SUBTITLE SECTION TOGGLE ---
+
+    setupSubtitleToggle() {
+        const btn = document.getElementById('subtitleToggleBtn');
+        if (!btn) return;
+        btn.addEventListener('click', () => this.toggleSubtitleSection());
+    }
+
+    toggleSubtitleSection() {
+        const section = document.getElementById('subtitleControlsSection');
+        const btn = document.getElementById('subtitleToggleBtn');
+        if (!section) return;
+        const collapsed = section.classList.toggle('subtitle-collapsed');
+        if (btn) btn.classList.toggle('btn-active', !collapsed);
+    }
+
+    showSubtitleSection() {
+        const section = document.getElementById('subtitleControlsSection');
+        const btn = document.getElementById('subtitleToggleBtn');
+        if (!section) return;
+        section.classList.remove('subtitle-collapsed');
+        if (btn) btn.classList.add('btn-active');
+    }
+
+    // --- RECENT FILES ---
+
+    setupRecentFiles() {
+        const btn = document.getElementById('recentFilesBtn');
+        const dropdown = document.getElementById('recentFilesDropdown');
+        const clearBtn = document.getElementById('recentFilesClear');
+
+        if (!btn || !dropdown) return;
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.renderRecentFiles();
+            dropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && e.target !== btn) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                localStorage.removeItem('recentFiles');
+                this.renderRecentFiles();
+            });
+        }
+    }
+
+    renderRecentFiles() {
+        const list = document.getElementById('recentFilesList');
+        if (!list) return;
+
+        let files = [];
+        try {
+            files = JSON.parse(localStorage.getItem('recentFiles') || '[]');
+        } catch (e) { files = []; }
+
+        if (files.length === 0) {
+            list.innerHTML = '<div class="recent-files-empty">No recent files</div>';
+            return;
+        }
+
+        list.innerHTML = files.map((f, i) => `
+            <div class="recent-file-item" data-index="${i}">
+                <i class="fas fa-film"></i>
+                <span class="recent-file-name" title="${f.name}">${f.name}</span>
+            </div>
+        `).join('');
+
+        list.querySelectorAll('.recent-file-item').forEach((el) => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.dataset.index, 10);
+                const file = files[idx];
+                if (file && window.videoPlayer) {
+                    window.videoPlayer.loadVideoFromPath(file.path, file.size);
+                }
+                document.getElementById('recentFilesDropdown').classList.add('hidden');
+            });
+        });
     }
 }
 

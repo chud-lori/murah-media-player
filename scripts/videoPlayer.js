@@ -254,12 +254,19 @@ export class VideoPlayer {
         const savedVolume = parseFloat(localStorage.getItem('playerVolume') ?? '1.0');
         this.videoElement.volume = savedVolume;
         const volumeSlider = document.getElementById('volumeSlider');
-        if (volumeSlider) volumeSlider.value = savedVolume;
+        if (volumeSlider) {
+            volumeSlider.value = savedVolume;
+            volumeSlider.style.setProperty('--volume-level', `${savedVolume * 100}%`);
+        }
         this.updateVolumeIcon(savedVolume);
 
         const seekBar = document.getElementById('seekBar');
         const durationDisplay = document.getElementById('duration');
-        if (seekBar) seekBar.max = this.videoElement.duration;
+        if (seekBar) {
+            seekBar.max = this.videoElement.duration;
+            seekBar.style.setProperty('--seek-progress', '0%');
+            seekBar.style.setProperty('--buffered-progress', '0%');
+        }
         if (durationDisplay) durationDisplay.textContent = this.formatTime(this.videoElement.duration);
     }
 
@@ -274,6 +281,13 @@ export class VideoPlayer {
             currentTimeDisplay.textContent = this.formatTime(this.videoElement.currentTime);
         }
 
+        // Update seek bar fill
+        if (seekBar && seekBar.max > 0) {
+            const progress = (this.videoElement.currentTime / this.videoElement.duration) * 100;
+            seekBar.style.setProperty('--seek-progress', `${progress}%`);
+            this.updateBufferedRange(seekBar);
+        }
+
         // Save playback position periodically (every 5 seconds)
         if (this.currentVideoPath && this.videoElement.currentTime > 0) {
             const currentSecond = Math.floor(this.videoElement.currentTime);
@@ -283,6 +297,18 @@ export class VideoPlayer {
                     this.lastSavedSecond = currentSecond;
                 }
             }
+        }
+    }
+
+    updateBufferedRange(seekBar) {
+        const video = this.videoElement;
+        if (!video.duration || !video.buffered.length) return;
+        try {
+            const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+            const percent = (bufferedEnd / video.duration) * 100;
+            seekBar.style.setProperty('--buffered-progress', `${percent}%`);
+        } catch (e) {
+            // ignore
         }
     }
 
@@ -355,6 +381,8 @@ export class VideoPlayer {
         this.videoElement.volume = volume;
         this.updateVolumeIcon(volume);
         localStorage.setItem('playerVolume', volume.toString());
+        const volumeSlider = document.getElementById('volumeSlider');
+        if (volumeSlider) volumeSlider.style.setProperty('--volume-level', `${volume * 100}%`);
 
         if (volume > 0) {
             this.videoElement.muted = false;
@@ -721,6 +749,18 @@ export class VideoPlayer {
         };
     }
 
+    // Recent files management
+    addRecentFile(name, filePath, fileSize) {
+        const key = 'recentFiles';
+        try {
+            const list = JSON.parse(localStorage.getItem(key) || '[]')
+                .filter(f => f.path !== filePath);
+            list.unshift({ name, path: filePath, size: fileSize || 0 });
+            if (list.length > 8) list.length = 8;
+            localStorage.setItem(key, JSON.stringify(list));
+        } catch (e) { /* ignore */ }
+    }
+
     // Load a video from a native file path (used by Electron menu actions)
     loadVideoFromPath(filePath, fileSize) {
         const fileName = filePath.replace(/\\/g, '/').split('/').pop() || filePath;
@@ -759,6 +799,7 @@ export class VideoPlayer {
         }
 
         this.updateHeaderTitle(fileName);
+        this.addRecentFile(fileName, filePath, fileSize);
     }
 
     // Load subtitle content directly (used by Electron menu actions)

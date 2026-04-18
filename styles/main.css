@@ -387,14 +387,28 @@ body:not(.platform-darwin) .header {
 }
 
 #seekBar {
+    --seek-progress: 0%;
+    --buffered-progress: 0%;
     width: 100%;
     height: 6px;
     -webkit-appearance: none;
     appearance: none;
-    background: var(--bg-tertiary);
+    background: linear-gradient(to right,
+        var(--accent-primary) 0%,
+        var(--accent-primary) var(--seek-progress),
+        rgba(59, 130, 246, 0.22) var(--seek-progress),
+        rgba(59, 130, 246, 0.22) var(--buffered-progress),
+        var(--bg-tertiary) var(--buffered-progress),
+        var(--bg-tertiary) 100%
+    );
     border-radius: 3px;
     outline: none;
     cursor: pointer;
+    transition: height 0.1s ease;
+}
+
+#seekBar:hover {
+    height: 8px;
 }
 
 #seekBar::-webkit-slider-thumb {
@@ -600,11 +614,17 @@ body:not(.platform-darwin) .header {
 }
 
 #volumeSlider {
-    width: 60px;
+    --volume-level: 100%;
+    width: 80px;
     height: 4px;
     -webkit-appearance: none;
     appearance: none;
-    background: var(--bg-tertiary);
+    background: linear-gradient(to right,
+        var(--accent-primary) 0%,
+        var(--accent-primary) var(--volume-level),
+        var(--bg-tertiary) var(--volume-level),
+        var(--bg-tertiary) 100%
+    );
     border-radius: 2px;
     outline: none;
     cursor: pointer;
@@ -961,6 +981,121 @@ body:not(.platform-darwin) .header {
 
 #alwaysOnTopBtn.active i {
     color: var(--accent-primary);
+}
+
+/* Loop / Subtitle toggle active state */
+.control-btn.btn-active {
+    color: var(--accent-primary);
+}
+
+/* Subtitle controls — hidden by default, toggled via button */
+.subtitle-controls {
+    overflow: hidden;
+    max-height: 60px;
+    transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.25s ease;
+    opacity: 1;
+}
+
+.subtitle-controls.subtitle-collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+    pointer-events: none;
+}
+
+/* Recent Files */
+.recent-files-wrapper {
+    position: relative;
+}
+
+.recent-files-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    min-width: 280px;
+    max-width: 380px;
+    z-index: 500;
+    overflow: hidden;
+    animation: dropdownOpen 0.15s ease;
+}
+
+@keyframes dropdownOpen {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.recent-files-dropdown.hidden {
+    display: none;
+}
+
+.recent-files-header {
+    padding: 10px 14px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.recent-file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.recent-file-item:last-child {
+    border-bottom: none;
+}
+
+.recent-file-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.recent-file-item i {
+    color: var(--text-muted);
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.recent-file-name {
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+.recent-files-empty {
+    padding: 16px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.recent-files-clear {
+    padding: 8px 14px;
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: right;
+    border-top: 1px solid var(--border);
+    transition: color 0.15s;
+}
+
+.recent-files-clear:hover {
+    color: var(--text-secondary);
 }
 
 /* Scrollbar Styling (for any overflow areas) */

@@ -21,8 +21,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^39.1.1",
-    "electron-builder": "^26.0.12"
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1"
   },
   "build": {
     "appId": "com.murah.mediaplayer",
